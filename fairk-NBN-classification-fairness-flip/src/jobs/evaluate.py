@@ -1,10 +1,12 @@
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score
 
+from src.utils.general_utils import get_negative_protected_values
+
 
 class Evaluate():
 
-    def __init__(self, y_pred=None, y_actual=None,y_sensitive_attribute=None,class_attribute= None):
+    def  __init__(self, y_pred=None, y_actual=None,y_sensitive_attribute=None,class_attribute= None):
         self.y_pred = y_pred
         self.y_actual = y_actual[class_attribute].tolist()
         self.y_sensitive_attribute = y_sensitive_attribute
@@ -24,12 +26,16 @@ class Evaluate():
         self.number_sensitive_attr_predicted_positive = [self.y_pred[i] for i in range(len(self.y_sensitive_attribute)) if self.y_sensitive_attribute[i] == 0 ].count(1)
         self.number_sensitive_attr_predicted_negative = [self.y_pred[i] for i in range(len(self.y_sensitive_attribute)) if self.y_sensitive_attribute[i] == 0 ].count(2)
 
+
         self.number_dom_attr_predicted_positive = [self.y_pred[i] for i in range(len(self.y_sensitive_attribute)) if self.y_sensitive_attribute[i] == 1 ].count(1)
         self.number_dom_attr_predicted_negative = [self.y_pred[i] for i in range(len(self.y_sensitive_attribute)) if self.y_sensitive_attribute[i] == 1 ].count(2)
 
+        self.sen_attr_positive_ratio = self.number_sensitive_attr_predicted_positive / (self.number_sensitive_attr_predicted_positive+self.number_sensitive_attr_predicted_negative)
+        self.dom_attr_positive_ratio = self.number_dom_attr_predicted_positive / (self.number_dom_attr_predicted_positive+self.number_dom_attr_predicted_negative)
+        self.ratio_diff = self.sen_attr_positive_ratio - self.dom_attr_positive_ratio
 
-        self.acc_fair_rate = ((self.tp_sensitive_attr+self.tn_sensitive_attr)/( self.tp_sensitive_attr + self.fp_sensitive_attr + self.fn_sensitive_attr + self.tn_sensitive_attr )) / ( ((self.tp - self.tp_sensitive_attr) +(self.tn - self.tn_sensitive_attr))/(self.tp - self.tp_sensitive_attr + self.fp - self.fp_sensitive_attr + self.fn - self.fn_sensitive_attr +self.tn - self.tn_sensitive_attr))
-
+        self.t0 = get_negative_protected_values(pred_val, self.x_val, self.y_val_sensitive_attr,
+                                                    self.class_attribute)
 
         for i in range(len(self.y_pred)):
             if self.y_actual[i] == self.y_pred[i] == 1:

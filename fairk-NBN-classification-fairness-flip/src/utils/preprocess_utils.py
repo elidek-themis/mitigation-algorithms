@@ -141,3 +141,24 @@ def backward_regression(df,sensitive_attribute, threshold_out=0.01):
     y_train = df.iloc[:, -1]
     train_data = pd.concat([x_train, y_train], axis=1)
     return train_data
+
+
+def flip_value(df, indices, new_value, column_name=None):
+    df=df.copy()
+    if isinstance(indices, int):
+        indices = [indices]
+    for index in indices:
+        df.loc[index, column_name] = new_value
+    return df
+
+'''
+empty_sublists_count = sum(1 for sublist in snegative_clasified_protected_class_subset if len(sublist) == 0)
+        pos_t0 = (self.model.predict(t0) == 1).sum()
+        results = []
+        for i in range(len(snegative_clasified_protected_class_subset)):
+            sublist = snegative_clasified_protected_class_subset[i]
+            number_to_check = indices1[i][0]
+            exists = number_to_check in sublist or len(sublist) == 0
+            results.append(exists)
+        false_count = results.count(False)
+'''

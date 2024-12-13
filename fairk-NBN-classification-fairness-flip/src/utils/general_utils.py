@@ -24,7 +24,7 @@ def get_neighbor_statistics(index, df, target_column):
         return "The specified index or column does not exist in the DataFrame."
 
 def get_negative_protected_values(y_val,x_val,sensitive_attr_list,class_attribute):
-    mask_y_val = y_val[class_attribute] == 2
+    mask_y_val = y_val == 2
     mask_y_val_sensitive_attr = pd.Series(sensitive_attr_list) == 0
     combined_mask = mask_y_val & mask_y_val_sensitive_attr
     t0 = x_val[combined_mask]
@@ -83,7 +83,58 @@ def group_sublists_by_shared_elements(n, list_of_lists):
 def filter_sublists_by_length(lst, length):
     return [sublist for sublist in lst if len(sublist) == length]
 
+def categorize_and_split_sublists(sublists):
+    # Determine the length of sublists based on the first sublist
+    sublist_length = len(sublists[0]) if sublists else 0
+
+    # Initialize dictionary for categories dynamically
+    result = {i: [] for i in range(sublist_length + 1)}
+
+    # Track which sublists have already been categorized
+    categorized = [False] * len(sublists)
+
+    # Compare each pair of sublists only once
+    for i in range(len(sublists)):
+        if categorized[i]:  # Skip if already categorized
+            continue
+
+        sublist1 = set(sublists[i])
+        matched = False
+
+        # Check for matches with other sublists
+        for j in range(i + 1, len(sublists)):
+            if categorized[j]:
+                continue
+
+            sublist2 = set(sublists[j])
+            shared_elements = sublist1.intersection(sublist2)
+
+            # Count the number of shared elements
+            shared_count = len(shared_elements)
+            if shared_count == sublist_length:
+                # All elements are shared; no differences
+                result[sublist_length].append([list(shared_elements), np.nan])
+                categorized[i] = True
+                categorized[j] = True
+                matched = True
+            elif 1 <= shared_count < sublist_length:
+                # Some elements are shared, find the different ones
+                diff1 = list(sublist1 - shared_elements)
+                diff2 = list(sublist2 - shared_elements)
+                result[shared_count].append([list(shared_elements), diff1 + diff2])
+                categorized[i] = True
+                categorized[j] = True
+                matched = True
+
+        # If no matches were found, categorize as 0
+        if not matched:
+            result[0].append(sublists[i])
+            categorized[i] = True
+
+    return result
 
 
-
+def nth_length_of_sorted_lists(lists, n):
+    sorted_lists = sorted(lists, key=len)
+    return len(sorted_lists[n])
 
