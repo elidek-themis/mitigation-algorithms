@@ -5,7 +5,7 @@ import os
 import pickle
 import numpy as np
 
-path_here = os.path.abspath('')
+path_here = os.path.abspath('')+'/CounterFair'
 dataset_dir = str(path_here)+'/Datasets/'
 results_cf_obj_dir = str(path_here)+'/Results/cf_obj/'
 results_cf_obj_method_dir = str(path_here)+'/Results/cf_obj_method/'

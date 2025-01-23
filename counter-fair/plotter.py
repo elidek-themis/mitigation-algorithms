@@ -19,7 +19,7 @@ import matplotlib.patches as patches
 from support import load_obj
 matplotlib.rc('ytick', labelsize=9)
 matplotlib.rc('xtick', labelsize=9)
-from fairness_clusters import datasets, methods_to_run, lagranges, likelihood_factors
+# from fairness_clusters import datasets, methods_to_run, lagranges, likelihood_factors
 from data_constructor import load_dataset
 import seaborn as sns
 # import plotly.express as px
