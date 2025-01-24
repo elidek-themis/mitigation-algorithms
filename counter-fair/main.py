@@ -13,7 +13,7 @@ from sklearn.metrics import f1_score
 from support import save_obj
 import time
 
-datasets = ['synthetic_athlete','dutch','german','student','compass','adult']
+datasets = ['synthetic_athlete','german','student'] # ,'dutch','compass','adult'
 
 methods_to_run = ['CounterFair_dist'] # ['CounterFair_dist', 'CounterFair_dev_dist', 'CounterFair_e']
 step = 0.01                # Step size to change continuous features
@@ -26,7 +26,7 @@ clustering_metric = 'complete' # Clustering metric used
 dist = 'L1_L0'
 lagranges = [0.5]  # [0.5] [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 likelihood_factors = [0.5] # [0.5] [0.0, 0.1, 0.2, 0.3, 0.4, 0.5] This is used to calculate a minimum rho admitted for each CF found
-weight = 0.01
+weight = 0.00
 np.random.seed(seed_int)
 
 def percentage_close_train(dataset):
@@ -45,7 +45,7 @@ def support_threshold(dataset):
     """
     Selects the appropriate support threshold
     """
-    if dataset in ['compass','synthetic_athlete','german']:
+    if dataset in ['compass','synthetic_athlete','german','student']:
         support_th = 0.01
     elif dataset in ['dutch']:
         support_th = 0.1

@@ -743,9 +743,10 @@ class Evaluator():
         DESCRIPTION:            Stores the cluster CF and obtains all the performance measures for the cluster counterfactual 
         OUTPUT: (None: stored as class attributes)
         """
-        cols = ['Method','alpha','beta','gamma','delta1','delta2','delta3','feature','feat_value','Sensitive group','instance_idx','centroid_idx','normal_centroid','centroid',
+        cols = ['Method','alpha','feature','feat_value','Sensitive group','instance_idx','centroid_idx','normal_centroid','centroid',
                 'normal_cf','cf','Distance','Feasibility','Likelihood','Effectiveness','Time','model_status','obj_val']
         data = counterfactual.data
+        self.test_number_instances = len(data.test_df)
         cf_dict = counterfactual.cf_method.normal_x_cf
         graph_nodes_dict = counterfactual.cf_method.graph_nodes
         likelihood_dict = counterfactual.cf_method.likelihood_dict
@@ -773,10 +774,10 @@ class Evaluator():
                 sensitive_group = f'{feature}: {feat_val_name}'
                 cf_proximity = distance_calculation(instance, normal_cf, kwargs={'dat':data, 'type':counterfactual.type})
                 cf_feasibility = verify_feasibility(instance, normal_cf, data)
-                data_list = [counterfactual.method, counterfactual.alpha, 0, 0, 0, 0, 0,
-                            feature, feat_val_name, sensitive_group, idx, idx, instance, original_instance,
-                            normal_cf, original_cf, cf_proximity/len_positives_sensitive_group, cf_feasibility, likelihood, effectiveness, counterfactual.cf_method.run_time, 
-                            counterfactual.cf_method.model_status, counterfactual.cf_method.obj_val]
+                data_list = [counterfactual.method, counterfactual.alpha, feature, feat_val_name, sensitive_group, 
+                            idx, idx, instance, original_instance, normal_cf, 
+                            original_cf, cf_proximity/len_positives_sensitive_group, cf_feasibility, likelihood, effectiveness, 
+                            counterfactual.cf_method.run_time, counterfactual.cf_method.model_status, counterfactual.cf_method.obj_val]
                 data_df = pd.DataFrame(data=[data_list], index=[len(self.cf_df)], columns=cols)
                 self.cf_df = pd.concat((self.cf_df, data_df),axis=0)
         print('Printed counterfactual data')

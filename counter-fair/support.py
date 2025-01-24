@@ -5,6 +5,8 @@ import os
 import pickle
 import numpy as np
 
+import warnings
+warnings.filterwarnings("ignore")
 path_here = os.path.abspath('')+'/CounterFair'
 dataset_dir = str(path_here)+'/Datasets/'
 results_cf_obj_dir = str(path_here)+'/Results/cf_obj/'

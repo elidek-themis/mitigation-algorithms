@@ -19,7 +19,7 @@ import matplotlib.patches as patches
 from support import load_obj
 matplotlib.rc('ytick', labelsize=9)
 matplotlib.rc('xtick', labelsize=9)
-# from fairness_clusters import datasets, methods_to_run, lagranges, likelihood_factors
+from main import datasets, methods_to_run, lagranges, likelihood_factors
 from data_constructor import load_dataset
 import seaborn as sns
 # import plotly.express as px
@@ -1996,7 +1996,7 @@ def parallel_plots_alpha_01(datasets):
     for dataset_idx in range(len(datasets)):
         data_str = datasets[dataset_idx]
         data_name = dataset_names[data_str]
-        eval_alpha_01 = load_obj(f'{data_str}_BIGRACE_dist_alpha_0.1_eval.pkl')
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.0_support_0.01_eval.pkl')
         eval_alpha_01_df = eval_alpha_01.cf_df
         original_features = list(eval_alpha_01.raw_data_cols)
         labels_dict = {}
@@ -2057,6 +2057,35 @@ def parallel_plots_alpha_01(datasets):
             compilation_mean_np = np.concatenate([compilation_mean_np_list])
             compilation_mode_np = np.concatenate([compilation_mode_np_list])
         parallel_coordinates(data_name, compilation_mean_np, compilation_mode_np, original_features, mean_minus_std_list, mean_plus_std_list, min_all, max_all).savefig(results_cf_plots_dir+str(data_str)+'_subgroups_details_counterfair.pdf', format='pdf', dpi=400)
+
+def pie_chart_subgroup_relevance(datasets):
+    """
+    Plots parallel coordinates for each of the groups found
+    """
+    dataset_names = get_data_names(datasets)
+    for dataset_idx in range(len(datasets)):
+        data_str = datasets[dataset_idx]
+        data_name = dataset_names[data_str]
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.0_support_0.01_eval.pkl')
+        test_number_instances = eval_alpha_01.test_number_instances
+        eval_alpha_01_df = eval_alpha_01.cf_df
+        total_false_negatives = len(eval_alpha_01_df)
+        sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
+        sensitive_group_lengths = {}
+        for sensitive_group in sensitive_groups:
+            sensitive_group_lengths[sensitive_group] = len(eval_alpha_01_df[eval_alpha_01_df['Sensitive group'] == sensitive_group])
+        test_minus_false_negatives = test_number_instances - total_false_negatives
+        sensitive_group_lengths['Remaining Test Instances'] = test_minus_false_negatives
+        fig, ax = plt.subplots()
+        ax.pie(sensitive_group_lengths.values(), labels=sensitive_group_lengths.keys())
+        ax.set_title(data_name)
+        fig.subplots_adjust(left=0.1,
+                    bottom=0.03,
+                    right=0.99,
+                    top=0.99,
+                    wspace=0.1,
+                    hspace=0.1)
+        plt.savefig(results_cf_plots_dir+'pie_chart_subgroup_relevance.pdf',format='pdf',dpi=400)
 
 def effectiveness_fix_ares_facts(df, len_instances):
     """
@@ -2155,7 +2184,8 @@ metric = 'proximity'
 # proximity_across_alpha_counterfair(datasets)
 # proximity_fairness_across_alpha_counterfair(datasets)
 # burden_effectiveness_benchmark(datasets)
-parallel_plots_alpha_01(datasets)
+# parallel_plots_alpha_01(datasets)
+pie_chart_subgroup_relevance(datasets)
 # actionability_oriented_fairness_plot(datasets, methods_to_run)
 # effectiveness_across_methods(datasets, methods_to_run)
 # time_benchmark(datasets)
