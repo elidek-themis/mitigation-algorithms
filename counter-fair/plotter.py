@@ -2067,17 +2067,25 @@ def pie_chart_subgroup_relevance(datasets):
         data_str = datasets[dataset_idx]
         data_name = dataset_names[data_str]
         eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.0_support_0.01_eval.pkl')
+        original_features = eval_alpha_01.raw_data_cols
         test_number_instances = eval_alpha_01.test_number_instances
         eval_alpha_01_df = eval_alpha_01.cf_df
         total_false_negatives = len(eval_alpha_01_df)
         sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
-        sensitive_group_lengths = {}
-        for sensitive_group in sensitive_groups:
-            sensitive_group_lengths[sensitive_group] = len(eval_alpha_01_df[eval_alpha_01_df['Sensitive group'] == sensitive_group])
-        test_minus_false_negatives = test_number_instances - total_false_negatives
-        sensitive_group_lengths['Remaining Test Instances'] = test_minus_false_negatives
+        original_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
+        subgroup_lengths = {}
+        if original_cfs.shape[0] == len(sensitive_groups):
+            print('Subgroups equal the sensitive feature groups!')
+            for sensitive_group in sensitive_groups:
+                subgroup_lengths['FN: '+sensitive_group] = len(eval_alpha_01_df[eval_alpha_01_df['Sensitive group'] == sensitive_group])
+            test_minus_false_negatives = test_number_instances - total_false_negatives
+        else:
+            print('Subgroups NOT equal to the sensitive feature groups')
+            for idx, cf in enumerate(original_cfs):
+                subgroup_lengths[f'FN: S {idx}'] = len(eval_alpha_01_df[eval_alpha_01_df['cf'] == cf])
+        subgroup_lengths['Remaining Test Instances'] = test_minus_false_negatives
         fig, ax = plt.subplots()
-        ax.pie(sensitive_group_lengths.values(), labels=sensitive_group_lengths.keys())
+        ax.pie(subgroup_lengths.values(), labels=subgroup_lengths.keys(), autopct='%1.1f%%', )
         ax.set_title(data_name)
         fig.subplots_adjust(left=0.1,
                     bottom=0.03,
@@ -2085,7 +2093,7 @@ def pie_chart_subgroup_relevance(datasets):
                     top=0.99,
                     wspace=0.1,
                     hspace=0.1)
-        plt.savefig(results_cf_plots_dir+'pie_chart_subgroup_relevance.pdf',format='pdf',dpi=400)
+        plt.savefig(results_cf_plots_dir+f'pie_chart_subgroup_relevance_{data_name}.pdf',format='pdf',dpi=400)
 
 def effectiveness_fix_ares_facts(df, len_instances):
     """
