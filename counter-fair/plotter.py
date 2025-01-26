@@ -2058,6 +2058,34 @@ def parallel_plots_alpha_01(datasets):
             compilation_mode_np = np.concatenate([compilation_mode_np_list])
         parallel_coordinates(data_name, compilation_mean_np, compilation_mode_np, original_features, mean_minus_std_list, mean_plus_std_list, min_all, max_all).savefig(results_cf_plots_dir+str(data_str)+'_subgroups_details_counterfair.pdf', format='pdf', dpi=400)
 
+def get_subgroup_name(feat_protected, subgroup_instance):
+    """
+    Method to obtain the name string for a given subgroup
+    """
+    feat_protected_list = list(feat_protected.keys())
+    string_group = ""
+    for feat_key in feat_protected_list:
+        feat_value = subgroup_instance[feat_key]
+        feat_value_name = feat_protected[feat_key][feat_value]
+        string_to_add = f'{feat_key}: {feat_value_name}'
+        if string_group == "":
+            string_group = string_group + string_to_add
+        else:
+            string_group = string_group + ' | ' + string_to_add
+    return string_group
+
+def get_unique_cfs_instance_dict(graph_nodes, eval_alpha_df, original_features):
+    """
+    Method that obtains the unique CFs and a dictionary of instances per CF
+    """
+    unique_cf_list, instance_dict = [], {}
+    for n in range(len(graph_nodes)):
+        unique_cf_list.append(eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['cf'].iloc[0][0])
+        original_instance_array = np.array(list(eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['centroid']))[:,:-1]
+        instance_dict[n] = pd.DataFrame(data=original_instance_array, columns=original_features)
+    unique_cfs = np.array(unique_cf_list)
+    return unique_cfs, instance_dict
+
 def pie_chart_subgroup_relevance(datasets):
     """
     Plots parallel coordinates for each of the groups found
@@ -2070,30 +2098,100 @@ def pie_chart_subgroup_relevance(datasets):
         original_features = eval_alpha_01.raw_data_cols
         test_number_instances = eval_alpha_01.test_number_instances
         eval_alpha_01_df = eval_alpha_01.cf_df
+        feat_protected = eval_alpha_01.feat_protected
         total_false_negatives = len(eval_alpha_01_df)
         sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
         original_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
+        graph_nodes = np.unique(eval_alpha_01_df['graph_node'].values)
+        unique_cfs, instance_dict = get_unique_cfs_instance_dict(graph_nodes, eval_alpha_01_df, original_features)
         subgroup_lengths = {}
+        test_minus_false_negatives = test_number_instances - total_false_negatives
+        subgroup_lengths['Remaining Test Instances'] = test_minus_false_negatives
         if original_cfs.shape[0] == len(sensitive_groups):
             print('Subgroups equal the sensitive feature groups!')
             for sensitive_group in sensitive_groups:
-                subgroup_lengths['FN: '+sensitive_group] = len(eval_alpha_01_df[eval_alpha_01_df['Sensitive group'] == sensitive_group])
-            test_minus_false_negatives = test_number_instances - total_false_negatives
+                subgroup_lengths[sensitive_group] = len(eval_alpha_01_df[eval_alpha_01_df['Sensitive group'] == sensitive_group])
         else:
             print('Subgroups NOT equal to the sensitive feature groups')
-            for idx, cf in enumerate(original_cfs):
-                subgroup_lengths[f'FN: S {idx}'] = len(eval_alpha_01_df[eval_alpha_01_df['cf'] == cf])
-        subgroup_lengths['Remaining Test Instances'] = test_minus_false_negatives
+            for n in range(len(graph_nodes)):
+                subgroup_df = instance_dict[n]
+                len_subgroup = len(subgroup_df)
+                feat_protected_list = list(feat_protected.keys())
+                subgroup_instance = subgroup_df.loc[0, feat_protected_list]
+                aux_string = r'$S_{sub}^{%s} $ ' %n
+                string_group = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({len_subgroup})'
+                subgroup_lengths[string_group] = len(eval_alpha_01_df[eval_alpha_01_df['graph_node'] == graph_nodes[n]])
         fig, ax = plt.subplots()
         ax.pie(subgroup_lengths.values(), labels=subgroup_lengths.keys(), autopct='%1.1f%%', )
         ax.set_title(data_name)
-        fig.subplots_adjust(left=0.1,
-                    bottom=0.03,
-                    right=0.99,
-                    top=0.99,
-                    wspace=0.1,
-                    hspace=0.1)
+        # fig.subplots_adjust(left=0.1,
+        #             bottom=0.03,
+        #             right=0.99,
+        #             top=0.99,
+        #             wspace=0.1,
+        #             hspace=0.1)
+        plt.tight_layout()
         plt.savefig(results_cf_plots_dir+f'pie_chart_subgroup_relevance_{data_name}.pdf',format='pdf',dpi=400)
+
+def fnr_per_subgroup():
+    """
+    Method to bar plot the FNR per sensitive subgroup
+    """
+    def count_instances(subgroup_instance, test_df, feat_protected):
+        """
+        Gets the amount of instances from the subgroup
+        """
+        feat_protected_list = list(feat_protected.keys())
+        instance_feat_value = subgroup_instance[feat_protected_list].values
+        test_df_feat_protected = test_df[feat_protected_list].values
+        count = 0
+        for row in test_df_feat_protected:
+            if all(row == instance_feat_value):
+                count+=1
+        return count
+
+    dataset_names = get_data_names(datasets)
+    for dataset_idx in range(len(datasets)):
+        data_str = datasets[dataset_idx]
+        data_name = dataset_names[data_str]
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.0_support_0.01_eval.pkl')
+        original_features = eval_alpha_01.raw_data_cols
+        eval_alpha_01_df = eval_alpha_01.cf_df
+        feat_protected = eval_alpha_01.feat_protected
+        # unique_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
+        sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
+        graph_nodes = np.unique(eval_alpha_01_df['graph_node'].values)
+        unique_cfs, instance_dict = get_unique_cfs_instance_dict(graph_nodes, eval_alpha_01_df, original_features)
+        if unique_cfs.shape[0] == len(sensitive_groups):
+            print('Subgroups equal the sensitive feature groups!')
+        else:
+            print('Subgroups NOT equal to the sensitive feature groups')
+        subgroup_data = {}
+        for n in range(len(graph_nodes)):
+            subgroup_df = instance_dict[n]
+            feat_protected_list = list(feat_protected.keys())
+            subgroup_instance = subgroup_df.loc[0, feat_protected_list]
+            count_subgroup_total_instances = count_instances(subgroup_instance, eval_alpha_01.test_df, feat_protected)
+            subgroup_len = len(subgroup_df)
+            aux_string = r'$S_{sub}^{%s} $ ' %n
+            string_group = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
+            subgroup_data[string_group] = subgroup_len/count_subgroup_total_instances
+        x_range = range(len(subgroup_data.keys()))
+        fig, ax = plt.subplots()
+        ax.bar(subgroup_data.keys(), height=subgroup_data.values())
+        ax.set_title(data_name)
+        ax.set_ylabel(r'FNR per subgroup')
+        ax.set_xlabel(r'Subgroup S')
+        ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
+        # fig.subplots_adjust(left=0.1,
+        #             bottom=0.03,
+        #             right=0.99,
+        #             top=0.99,
+        #             wspace=0.1,
+        #             hspace=0.1)
+        plt.tight_layout()
+        plt.savefig(results_cf_plots_dir+f'FNR_per_subgroup_{data_name}.pdf',format='pdf',dpi=400)
+
 
 def effectiveness_fix_ares_facts(df, len_instances):
     """
@@ -2194,6 +2292,7 @@ metric = 'proximity'
 # burden_effectiveness_benchmark(datasets)
 # parallel_plots_alpha_01(datasets)
 pie_chart_subgroup_relevance(datasets)
+fnr_per_subgroup()
 # actionability_oriented_fairness_plot(datasets, methods_to_run)
 # effectiveness_across_methods(datasets, methods_to_run)
 # time_benchmark(datasets)

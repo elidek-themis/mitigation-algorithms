@@ -207,12 +207,12 @@ class COUNTERFAIR:
             print(f'Optimizer solution status: {opt_model.status}') # 1: 'LOADED', 2: 'OPTIMAL', 3: 'INFEASIBLE', 4: 'INF_OR_UNBD', 5: 'UNBOUNDED', 6: 'CUTOFF', 7: 'ITERATION_LIMIT', 8: 'NODE_LIMIT', 9: 'TIME_LIMIT', 10: 'SOLUTION_LIMIT', 11: 'INTERRUPTED', 12: 'NUMERIC', 13: 'SUBOPTIMAL', 14: 'INPROGRESS', 15: 'USER_OBJ_LIMIT'
             print(f'Solution:')
             obj_val = opt_model.ObjVal
-            sol_x, graph_nodes_solution, likelihood, effectiveness = {}, {}, {}, {}
+            sol_x, sol_n, graph_nodes_solution, likelihood, effectiveness = {}, {}, {}, {}, {}
             counter_allowed = 0
             for i in set_Instances:
                 time.sleep(0.25)
                 for n in G.nodes:
-                    if cf[i, n].x > 0.1:
+                    if cf[i, n].x > 0.5:
                         sol_x[i] = graph.all_nodes[n - 1]
                         graph_nodes_solution[i] = n
                         likelihood[n] = graph.rho[n]
