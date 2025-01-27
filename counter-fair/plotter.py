@@ -2137,7 +2137,7 @@ def fnr_per_subgroup():
     """
     Method to bar plot the FNR per sensitive subgroup
     """
-    def count_instances(subgroup_instance, test_df, feat_protected):
+    def count_instances_subgroup(subgroup_instance, test_df, feat_protected):
         """
         Gets the amount of instances from the subgroup
         """
@@ -2158,7 +2158,6 @@ def fnr_per_subgroup():
         original_features = eval_alpha_01.raw_data_cols
         eval_alpha_01_df = eval_alpha_01.cf_df
         feat_protected = eval_alpha_01.feat_protected
-        # unique_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
         sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
         graph_nodes = np.unique(eval_alpha_01_df['graph_node'].values)
         unique_cfs, instance_dict = get_unique_cfs_instance_dict(graph_nodes, eval_alpha_01_df, original_features)
@@ -2171,12 +2170,11 @@ def fnr_per_subgroup():
             subgroup_df = instance_dict[n]
             feat_protected_list = list(feat_protected.keys())
             subgroup_instance = subgroup_df.loc[0, feat_protected_list]
-            count_subgroup_total_instances = count_instances(subgroup_instance, eval_alpha_01.test_df, feat_protected)
+            count_subgroup_total_instances = count_instances_subgroup(subgroup_instance, eval_alpha_01.test_df, feat_protected)
             subgroup_len = len(subgroup_df)
             aux_string = r'$S_{sub}^{%s} $ ' %n
             string_group = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_group] = subgroup_len/count_subgroup_total_instances
-        x_range = range(len(subgroup_data.keys()))
         fig, ax = plt.subplots()
         ax.bar(subgroup_data.keys(), height=subgroup_data.values())
         ax.set_title(data_name)
@@ -2192,6 +2190,95 @@ def fnr_per_subgroup():
         plt.tight_layout()
         plt.savefig(results_cf_plots_dir+f'FNR_per_subgroup_{data_name}.pdf',format='pdf',dpi=400)
 
+def fnr_per_subgroup_vs_group():
+    """
+    Method to bar plot the FNR per sensitive subgroup
+    """
+    def count_instances_group(subgroup_instance, test_df, feat):
+        """
+        Method to count the instances in the group
+        """
+        subgroup_feat = subgroup_instance[feat].values
+        test_df_feat = test_df[feat].values
+        count = 0
+        for row in test_df_feat:
+            if all(row == subgroup_feat):
+                count+=1
+        return count
+    
+    def count_instances_subgroup(subgroup_instance, test_df, feat_protected):
+        """
+        Gets the amount of instances from the subgroup
+        """
+        feat_protected_list = list(feat_protected.keys())
+        instance_feat_value = subgroup_instance[feat_protected_list].values
+        test_df_feat_protected = test_df[feat_protected_list].values
+        count = 0
+        for row in test_df_feat_protected:
+            if all(row == instance_feat_value):
+                count+=1
+        return count
+    
+    def count_instances_subgroup_feat(subgroup_instance, original_instances_df, feat):
+        """
+        Gets the amount of false instances in the feature group of the instances
+        """
+        subgroup_feat = subgroup_instance[feat].values
+        original_instances_feat_df = original_instances_df[feat].values
+        count = 0
+        for row in original_instances_feat_df:
+            if all(row == subgroup_feat):
+                count+=1
+        return count
+
+    dataset_names = get_data_names(datasets)
+    for dataset_idx in range(len(datasets)):
+        data_str = datasets[dataset_idx]
+        data_name = dataset_names[data_str]
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.0_support_0.01_eval.pkl')
+        original_features = eval_alpha_01.raw_data_cols
+        eval_alpha_01_df = eval_alpha_01.cf_df
+        feat_protected = eval_alpha_01.feat_protected
+        sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
+        graph_nodes = np.unique(eval_alpha_01_df['graph_node'].values)
+        unique_cfs, instance_dict = get_unique_cfs_instance_dict(graph_nodes, eval_alpha_01_df, original_features)
+        original_instance_array = np.array(list(eval_alpha_01_df['centroid']))[:,:-1]
+        original_instance_df = pd.DataFrame(data=original_instance_array, columns=original_features)
+        if unique_cfs.shape[0] == len(sensitive_groups):
+            print('Subgroups equal the sensitive feature groups!')
+        else:
+            print('Subgroups NOT equal to the sensitive feature groups')
+        for n in range(len(graph_nodes)):
+            subgroup_data = {}
+            subgroup_df = instance_dict[n]
+            feat_protected_list = list(feat_protected.keys())
+            subgroup_instance = subgroup_df.loc[0, feat_protected_list]
+            count_subgroup_total_instances = count_instances_subgroup(subgroup_instance, eval_alpha_01.test_df, feat_protected)
+            subgroup_len = len(subgroup_df)
+            aux_string = r'$S_{sub}^{%s} $ ' %n
+            string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
+            subgroup_data[string_subgroup] = subgroup_len/count_subgroup_total_instances
+            for feat in feat_protected_list:
+                feat_count_false_neg_group = count_instances_subgroup_feat(subgroup_instance, original_instance_df, feat)
+                feat_count_group_total_instances = count_instances_group(subgroup_instance, eval_alpha_01.test_df, feat)
+                feat_value = subgroup_instance[feat]
+                feat_value_name = feat_protected[feat][feat_value]
+                string_to_add = f'{feat}: {feat_value_name}'
+                subgroup_data[string_to_add] = feat_count_false_neg_group/feat_count_group_total_instances
+            fig, ax = plt.subplots()
+            ax.bar(subgroup_data.keys(), height=subgroup_data.values())
+            ax.set_title(data_name)
+            ax.set_ylabel(r'FNR')
+            ax.set_xlabel(r'Subgroups and Sensitive Groups')
+            ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
+            # fig.subplots_adjust(left=0.1,
+            #             bottom=0.03,
+            #             right=0.99,
+            #             top=0.99,
+            #             wspace=0.1,
+            #             hspace=0.1)
+            plt.tight_layout()
+            plt.savefig(results_cf_plots_dir+f'FNR_per_subgroup_vs_group_{data_name}.pdf',format='pdf',dpi=400)
 
 def effectiveness_fix_ares_facts(df, len_instances):
     """

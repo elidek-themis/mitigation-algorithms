@@ -13,7 +13,7 @@ from sklearn.metrics import f1_score
 from support import save_obj
 import time
 
-datasets = ['student'] # ,'dutch','compass','adult'
+datasets = ['adult','dutch'] # ,'dutch','compass','adult'
 
 methods_to_run = ['CounterFair_dist'] # ['CounterFair_dist', 'CounterFair_dev_dist', 'CounterFair_e']
 step = 0.01                # Step size to change continuous features
@@ -37,7 +37,7 @@ def percentage_close_train(dataset):
         percentage_close_train_cf = 1
         continuous_bins = 10
     elif dataset in ['adult','dutch']:
-        percentage_close_train_cf = 0.3
+        percentage_close_train_cf = 0.1
         continuous_bins = 5
     return percentage_close_train_cf, continuous_bins
 
@@ -47,7 +47,7 @@ def support_threshold(dataset):
     """
     if dataset in ['compass','synthetic_athlete','german','student']:
         support_th = 0.01
-    elif dataset in ['dutch']:
+    elif dataset in ['dutch','adult']:
         support_th = 0.1
     return support_th
 
