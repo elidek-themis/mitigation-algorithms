@@ -2094,7 +2094,7 @@ def pie_chart_subgroup_relevance(datasets):
     for dataset_idx in range(len(datasets)):
         data_str = datasets[dataset_idx]
         data_name = dataset_names[data_str]
-        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.0_support_0.01_eval.pkl')
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.1_support_0.01_eval.pkl')
         original_features = eval_alpha_01.raw_data_cols
         test_number_instances = eval_alpha_01.test_number_instances
         eval_alpha_01_df = eval_alpha_01.cf_df

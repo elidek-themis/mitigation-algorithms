@@ -13,7 +13,7 @@ from sklearn.metrics import f1_score
 from support import save_obj
 import time
 
-datasets = ['adult','dutch'] # ,'dutch','compass','adult'
+datasets = ['synthetic_athlete','german','student','compass'] # ,'dutch','compass','adult'
 
 methods_to_run = ['CounterFair_dist'] # ['CounterFair_dist', 'CounterFair_dev_dist', 'CounterFair_e']
 step = 0.01                # Step size to change continuous features
