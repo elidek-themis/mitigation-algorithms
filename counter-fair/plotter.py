@@ -1,5 +1,5 @@
-import warnings
 warnings.filterwarnings("ignore")
+import warnings
 import numpy as np
 import pandas as pd
 import pickle
@@ -2420,10 +2420,28 @@ def calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df, type='L1_L
     normal_cf = normal_cf_df[0]
     distances = []
     for idx in normal_subgroup_df.index:
-        normal_instance = normal_subgroup_df.iloc[idx]
+        normal_instance = normal_subgroup_df.loc[idx]
         dist = distance_calculation_correction(normal_instance, normal_cf, kwargs=arg_dict)
         distances.append(dist)
-    return np.mean(dist)
+    return np.mean(distances)
+
+def calculate_group_burden(data, subgroup_instance, instances_df, normal_instances_df, normal_cfs_df, feat):
+    """
+    Calculates the average group burden
+    """
+    type = 'L1_L0'
+    arg_dict = {'dat': data, 'type':type}
+    feat_value = subgroup_instance[feat].values
+    group_fn_instances_idx = instances_df[instances_df[feat] == feat_value].index
+    group_normal_fn_instances = normal_instances_df.loc[group_fn_instances_idx,:]
+    group_normal_cfs = normal_cfs_df.loc[group_fn_instances_idx,:]
+    group_burden_list = []
+    for idx in group_fn_instances_idx:
+        normal_fn_instance = group_normal_fn_instances.loc[idx]
+        normal_cf = group_normal_cfs.loc[idx]
+        dist = distance_calculation_correction(normal_fn_instance, normal_cf, kwargs=arg_dict)
+        group_burden_list.append(dist)
+    return np.mean(group_burden_list)
 
 def burden_per_subgroup():
     """
@@ -2467,7 +2485,7 @@ def burden_per_subgroup():
         fig, ax = plt.subplots()
         ax.bar(subgroup_data.keys(), height=subgroup_data.values())
         ax.set_title(data_name)
-        ax.set_ylabel(r'FNR per subgroup')
+        ax.set_ylabel(r'Burden per subgroup')
         ax.set_xlabel(r'Subgroup S')
         ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
         # fig.subplots_adjust(left=0.1,
@@ -2481,44 +2499,8 @@ def burden_per_subgroup():
 
 def burden_per_subgroup_vs_group():
     """
-    Method to bar plot the FNR per sensitive subgroup
+    Method to bar plot the burden per subgroup and compare to the burden of each group
     """
-    def count_instances_group(subgroup_instance, test_df, feat):
-        """
-        Method to count the instances in the group
-        """
-        subgroup_feat = subgroup_instance[feat]
-        test_df_feat = test_df[feat].values
-        count = 0
-        for row in test_df_feat:
-            if row == subgroup_feat:
-                count+=1
-        return count
-    
-    def count_instances_subgroup(subgroup_instance, test_df, feat_protected):
-        """
-        Gets the amount of instances from the subgroup
-        """
-        feat_protected_list = list(feat_protected.keys())
-        instance_feat_value = subgroup_instance[feat_protected_list].values
-        test_df_feat_protected = test_df[feat_protected_list].values
-        count = 0
-        for row in test_df_feat_protected:
-            if all(row == instance_feat_value):
-                count+=1
-        return count
-    
-    def count_instances_subgroup_feat(subgroup_instance, original_instances_df, feat):
-        """
-        Gets the amount of false instances in the feature group of the instances
-        """
-        subgroup_feat = subgroup_instance[feat]
-        original_instances_feat_df = original_instances_df[feat].values
-        count = 0
-        for row in original_instances_feat_df:
-            if row == subgroup_feat:
-                count+=1
-        return count
 
     dataset_names = get_data_names(datasets)
     for dataset_idx in range(len(datasets)):
@@ -2526,6 +2508,7 @@ def burden_per_subgroup_vs_group():
         data_name = dataset_names[data_str]
         eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.1_support_0.01_eval.pkl')
         original_features = eval_alpha_01.raw_data_cols
+        normal_features = eval_alpha_01.processed_features
         eval_alpha_01_df = eval_alpha_01.cf_df
         feat_protected = eval_alpha_01.feat_protected
         sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
@@ -2533,8 +2516,12 @@ def burden_per_subgroup_vs_group():
         graph_nodes = list(range(len(original_cfs)))
         eval_alpha_01_df = modify_graph_nodes(original_cfs, eval_alpha_01_df)
         cf_dict, normal_cf_dict, instance_dict, normal_instance_dict = get_unique_cfs_instance_burden_dict(graph_nodes, eval_alpha_01_df, original_features)
-        original_instance_array = np.array(list(eval_alpha_01_df['centroid']))[:,:-1]
-        original_instance_df = pd.DataFrame(data=original_instance_array, columns=original_features)
+        instances_array = np.array(list(eval_alpha_01_df['centroid']))[:,:-1]
+        instances_df = pd.DataFrame(data=instances_array, columns=original_features)
+        normal_instances_array = np.array(list(eval_alpha_01_df['normal_centroid']))[:,:-1]
+        normal_instances_df = pd.DataFrame(data=normal_instances_array, columns=normal_features)
+        normal_cfs_array = np.array(list(eval_alpha_01_df['normal_cf']))[:,:-1]
+        normal_cfs_df = pd.DataFrame(data=normal_cfs_array, columns=normal_features)
         data = get_data(data_str)
         if original_cfs.shape[0] == len(sensitive_groups):
             print('Subgroups equal the sensitive feature groups!')
@@ -2549,6 +2536,7 @@ def burden_per_subgroup_vs_group():
             normal_subgroup_df = normal_instance_dict[n]
             cf_df = cf_dict[n]
             normal_cf_df = normal_cf_dict[n]
+            subgroup_len = len(subgroup_df)
             subgroup_data = {}
             subgroup_df = instance_dict[n]
             if data_str == 'student' and n == 4:
@@ -2560,16 +2548,15 @@ def burden_per_subgroup_vs_group():
             string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_subgroup] = mean_subgroup_burden
             for feat in feat_protected_list:
-                feat_count_false_neg_group = count_instances_subgroup_feat(subgroup_instance, original_instance_df, feat)
-                feat_count_group_total_instances = count_instances_group(subgroup_instance, test_df, feat)
+                mean_group_burden = calculate_group_burden(subgroup_instance, instances_df, normal_instances_df, normal_cfs_df, feat)
                 feat_value = subgroup_instance[feat]
                 feat_value_name = feat_protected[feat][feat_value]
                 string_to_add = f'{feat}: {feat_value_name}'
-                subgroup_data[string_to_add] = feat_count_false_neg_group/feat_count_group_total_instances
+                subgroup_data[string_to_add] = mean_group_burden
             fig, ax = plt.subplots()
             ax.bar(subgroup_data.keys(), height=subgroup_data.values())
             ax.set_title(data_name)
-            ax.set_ylabel(r'FNR')
+            ax.set_ylabel(r'd(X_i,X´_i)')
             ax.set_xlabel(r'Subgroups and Sensitive Groups')
             ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
             # fig.subplots_adjust(left=0.1,
@@ -2579,7 +2566,7 @@ def burden_per_subgroup_vs_group():
             #             wspace=0.1,
             #             hspace=0.1)
             plt.tight_layout()
-            plt.savefig(results_cf_plots_dir+f'FNR_per_subgroup_{n}_vs_group_{data_name}.pdf',format='pdf',dpi=400)
+            plt.savefig(results_cf_plots_dir+f'Burden_per_subgroup_{n}_vs_group_{data_name}.pdf',format='pdf',dpi=400)
 
 def effectiveness_fix_ares_facts(df, len_instances):
     """
@@ -2679,9 +2666,11 @@ metric = 'proximity'
 # proximity_fairness_across_alpha_counterfair(datasets)
 # burden_effectiveness_benchmark(datasets)
 # parallel_plots_alpha_01(datasets)
-# pie_chart_subgroup_relevance(datasets)
+pie_chart_subgroup_relevance(datasets)
 # fnr_per_subgroup()
-fnr_per_subgroup_vs_group()
+# fnr_per_subgroup_vs_group()
+burden_per_subgroup()
+burden_per_subgroup_vs_group()
 # actionability_oriented_fairness_plot(datasets, methods_to_run)
 # effectiveness_across_methods(datasets, methods_to_run)
 # time_benchmark(datasets)
