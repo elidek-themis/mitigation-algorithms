@@ -4,11 +4,12 @@ Imports
 import os
 import pickle
 import numpy as np
+import pandas as pd
 import sys
 import warnings
 warnings.filterwarnings("ignore")
 
-path_here = os.path.abspath('')+'/CounterFair'
+path_here = os.path.abspath('')#+'/CounterFair'
 dataset_dir = str(path_here)+'/Datasets/'
 results_cf_obj_dir = str(path_here)+'/Results/cf_obj/'
 results_cf_obj_method_dir = str(path_here)+'/Results/cf_obj_method/'
@@ -94,5 +95,8 @@ def load_obj(file_name):
     Method to read an Evaluator object containing the evaluation results for all the instances of a given dataset
     """
     with open(results_cf_obj_method_dir+file_name, 'rb') as input:
-        evaluator_obj = pickle.load(input)
+        if 'adult' in file_name or 'dutch' in file_name:
+            evaluator_obj = pd.read_pickle(input)
+        else:
+            evaluator_obj = pickle.load(input)
     return evaluator_obj
