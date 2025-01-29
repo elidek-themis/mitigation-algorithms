@@ -2553,9 +2553,8 @@ def burden_per_subgroup_vs_group():
             fig, ax = plt.subplots()
             ax.barh(subgroup_data.keys(), width=subgroup_data.values())
             ax.set_title(data_name)
-            ax.set_ylabel(r'Distance $d(X_{i},X´_{i})$ [L1 & L0]')
-            ax.set_xlabel(r'Subgroups $G_n$ and Sensitive Groups $s_k$')
-            ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
+            ax.set_xlabel(r'Distance $d(X_{i},X´_{i})$ [L1 & L0]')
+            ax.set_ylabel(r'Subgroups $G_n$ and Sensitive Groups $s_k$')
             # fig.subplots_adjust(left=0.1,
             #             bottom=0.03,
             #             right=0.99,
@@ -2663,7 +2662,7 @@ metric = 'proximity'
 # proximity_fairness_across_alpha_counterfair(datasets)
 # burden_effectiveness_benchmark(datasets)
 # parallel_plots_alpha_01(datasets)
-# pie_chart_subgroup_relevance(datasets)
+pie_chart_subgroup_relevance(datasets)
 # fnr_per_subgroup()
 # fnr_per_subgroup_vs_group()
 burden_per_subgroup()
