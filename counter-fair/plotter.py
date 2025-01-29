@@ -2470,6 +2470,8 @@ def burden_per_subgroup():
             test_df = data.test_df
         else:
             test_df = eval_alpha_01.test_df
+        if data_str == 'adult':
+            graph_nodes = [2, 8, 9, 10, 14, 19, 24, 29, 52, 60]
         for n in range(len(graph_nodes)):
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
@@ -2530,14 +2532,14 @@ def burden_per_subgroup_vs_group():
             test_df = data.test_df
         else:
             test_df = eval_alpha_01.test_df
+        if data_str == 'adult':
+            graph_nodes = [2, 8, 9, 10, 14, 19, 24, 29, 52, 60]
         for n in range(len(graph_nodes)):
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
             normal_cf_df = normal_cf_dict[n]
             subgroup_len = len(subgroup_df)
             subgroup_data = {}
-            if data_str == 'student' and n == 4:
-                subgroup_df = subgroup_df.iloc[:9]
             feat_protected_list = list(feat_protected.keys())
             subgroup_instance = subgroup_df.loc[0, feat_protected_list]
             mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
@@ -2662,7 +2664,7 @@ metric = 'proximity'
 # proximity_fairness_across_alpha_counterfair(datasets)
 # burden_effectiveness_benchmark(datasets)
 # parallel_plots_alpha_01(datasets)
-pie_chart_subgroup_relevance(datasets)
+# pie_chart_subgroup_relevance(datasets)
 # fnr_per_subgroup()
 # fnr_per_subgroup_vs_group()
 burden_per_subgroup()
