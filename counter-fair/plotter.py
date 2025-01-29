@@ -17,6 +17,7 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.path import Path
 import matplotlib.patches as patches
 from support import load_obj
+from evaluator_constructor import distance_calculation
 matplotlib.rc('ytick', labelsize=9)
 matplotlib.rc('xtick', labelsize=9)
 from main import datasets, methods_to_run, lagranges, likelihood_factors
@@ -2309,6 +2310,255 @@ def fnr_per_subgroup_vs_group():
             aux_string = r'$S_{sub}^{%s} $ ' %n
             string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_subgroup] = subgroup_len/count_subgroup_total_instances
+            for feat in feat_protected_list:
+                feat_count_false_neg_group = count_instances_subgroup_feat(subgroup_instance, original_instance_df, feat)
+                feat_count_group_total_instances = count_instances_group(subgroup_instance, test_df, feat)
+                feat_value = subgroup_instance[feat]
+                feat_value_name = feat_protected[feat][feat_value]
+                string_to_add = f'{feat}: {feat_value_name}'
+                subgroup_data[string_to_add] = feat_count_false_neg_group/feat_count_group_total_instances
+            fig, ax = plt.subplots()
+            ax.bar(subgroup_data.keys(), height=subgroup_data.values())
+            ax.set_title(data_name)
+            ax.set_ylabel(r'FNR')
+            ax.set_xlabel(r'Subgroups and Sensitive Groups')
+            ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
+            # fig.subplots_adjust(left=0.1,
+            #             bottom=0.03,
+            #             right=0.99,
+            #             top=0.99,
+            #             wspace=0.1,
+            #             hspace=0.1)
+            plt.tight_layout()
+            plt.savefig(results_cf_plots_dir+f'FNR_per_subgroup_{n}_vs_group_{data_name}.pdf',format='pdf',dpi=400)
+
+
+def get_subgroup_name(feat_protected, subgroup_instance):
+    """
+    Method to obtain the name string for a given subgroup
+    """
+    feat_protected_list = list(feat_protected.keys())
+    string_group = ""
+    for feat_key in feat_protected_list:
+        feat_value = subgroup_instance[feat_key]
+        feat_value_name = feat_protected[feat_key][feat_value]
+        string_to_add = f'{feat_key}: {feat_value_name}'
+        if string_group == "":
+            string_group = string_group + string_to_add
+        else:
+            string_group = string_group + ' | ' + string_to_add
+    return string_group
+
+def get_unique_cfs_instance_dict(graph_nodes, eval_alpha_df, original_features):
+    """
+    Method that obtains the unique CFs and a dictionary of instances per CF
+    """
+    unique_cf_list, instance_dict = [], {}
+    for n in range(len(graph_nodes)):
+        unique_cf_list.append(eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['cf'].iloc[0][0])
+        original_instance_array = np.array(list(eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['centroid']))[:,:-1]
+        instance_dict[n] = pd.DataFrame(data=original_instance_array, columns=original_features)
+    return instance_dict
+
+def get_test_data(data_str):
+    """
+    Method to estimate the number of total test instances
+    """
+    seed_int = 54321           # Seed integer value
+    np.random.seed(seed_int)
+    train_fraction = 0.7
+    step = 0.01
+    data = load_dataset(data_str, train_fraction, seed_int, step)
+    return data.test_df
+
+def get_data(data_str):
+    """
+    Method to estimate the number of total test instances
+    """
+    seed_int = 54321           # Seed integer value
+    np.random.seed(seed_int)
+    train_fraction = 0.7
+    step = 0.01
+    return load_dataset(data_str, train_fraction, seed_int, step)
+
+def modify_graph_nodes(original_cfs, eval_alpha_01_df):
+    """
+    Method that updates the graph node in the evaluator pandas DF
+    """
+    count=0
+    eval_alpha_01_df['graph_node'] = 0
+    for row_index_original in range(len(original_cfs)):
+        original_cf_instance = original_cfs[row_index_original]
+        for row_index in eval_alpha_01_df.index:
+            row = eval_alpha_01_df.loc[row_index,:]
+            cf_row = row['cf'][0]
+            if np.array_equal(original_cf_instance, cf_row):
+                eval_alpha_01_df.loc[row_index,'graph_node'] = count
+        count+=1
+    return eval_alpha_01_df
+
+def get_unique_cfs_instance_burden_dict(graph_nodes, eval_alpha_df, features, normal_features):
+    """
+    Method that obtains the CFs and Instances per subgroup
+    """
+    unique_cf_dict, unique_normal_cf_dict, instance_dict, normal_instance_dict = {}, {}, {}, {}
+    for n in range(len(graph_nodes)):
+        unique_cf_dict[n] = eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['cf'].iloc[0][0]
+        unique_normal_cf_dict[n] = eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['normal_cf'].iloc[0][0]
+        instance_array = np.array(list(eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['centroid']))[:,:-1]
+        normal_instance_array = np.array(list(eval_alpha_df[eval_alpha_df['graph_node'] == graph_nodes[n]]['normal_centroid']))[:,:-1]
+        instance_dict[n] = pd.DataFrame(data=instance_array, columns=features)
+        normal_instance_dict[n] = pd.DataFrame(data=normal_instance_array, columns=normal_features)
+    return unique_cf_dict, unique_normal_cf_dict, instance_dict, normal_instance_dict
+
+def calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df, type='L1_L0'):
+    """
+    Calculate the average subgroup burden
+    """
+    type = 'L1_L0'
+    arg_dict = {'dat': data, 'type':type}
+    normal_cf = normal_cf_df[0]
+    distances = []
+    for idx in normal_subgroup_df.index:
+        normal_instance = normal_subgroup_df.iloc[idx]
+        dist = distance_calculation_correction(normal_instance, normal_cf, kwargs=arg_dict)
+        distances.append(dist)
+    return np.mean(dist)
+
+def burden_per_subgroup():
+    """
+    Method to bar plot the burden per sensitive subgroup
+    """
+    dataset_names = get_data_names(datasets)
+    for dataset_idx in range(len(datasets)):
+        data_str = datasets[dataset_idx]
+        data_name = dataset_names[data_str]
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.1_support_0.01_eval.pkl')
+        original_features = eval_alpha_01.raw_data_cols
+        eval_alpha_01_df = eval_alpha_01.cf_df
+        feat_protected = eval_alpha_01.feat_protected
+        sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
+        original_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
+        graph_nodes = list(range(len(original_cfs)))
+        eval_alpha_01_df = modify_graph_nodes(original_cfs, eval_alpha_01_df)
+        cf_dict, normal_cf_dict, instance_dict, normal_instance_dict = get_unique_cfs_instance_burden_dict(graph_nodes, eval_alpha_01_df, original_features)
+        data = get_data(data_str)
+        if original_cfs.shape[0] == len(sensitive_groups):
+            print('Subgroups equal the sensitive feature groups!')
+        else:
+            print('Subgroups NOT equal to the sensitive feature groups')
+        subgroup_data = {}
+        if 'adult' in data_str or 'dutch' in data_str:
+            test_df = data.test_df
+        else:
+            test_df = eval_alpha_01.test_df
+        for n in range(len(graph_nodes)):
+            subgroup_df = instance_dict[n]
+            normal_subgroup_df = normal_instance_dict[n]
+            cf_df = cf_dict[n]
+            normal_cf_df = normal_cf_dict[n]
+            feat_protected_list = list(feat_protected.keys())
+            subgroup_instance = subgroup_df.loc[0, feat_protected_list]
+            mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
+            subgroup_len = len(subgroup_df)
+            aux_string = r'$S_{sub}^{%s} $ ' %n
+            string_group = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
+            subgroup_data[string_group] = mean_subgroup_burden
+        fig, ax = plt.subplots()
+        ax.bar(subgroup_data.keys(), height=subgroup_data.values())
+        ax.set_title(data_name)
+        ax.set_ylabel(r'FNR per subgroup')
+        ax.set_xlabel(r'Subgroup S')
+        ax.set_xticklabels(subgroup_data.keys(), rotation = 15, ha='center')
+        # fig.subplots_adjust(left=0.1,
+        #             bottom=0.03,
+        #             right=0.99,
+        #             top=0.99,
+        #             wspace=0.1,
+        #             hspace=0.1)
+        plt.tight_layout()
+        plt.savefig(results_cf_plots_dir+f'Burden_per_subgroup_{data_name}.pdf',format='pdf',dpi=400)
+
+def burden_per_subgroup_vs_group():
+    """
+    Method to bar plot the FNR per sensitive subgroup
+    """
+    def count_instances_group(subgroup_instance, test_df, feat):
+        """
+        Method to count the instances in the group
+        """
+        subgroup_feat = subgroup_instance[feat]
+        test_df_feat = test_df[feat].values
+        count = 0
+        for row in test_df_feat:
+            if row == subgroup_feat:
+                count+=1
+        return count
+    
+    def count_instances_subgroup(subgroup_instance, test_df, feat_protected):
+        """
+        Gets the amount of instances from the subgroup
+        """
+        feat_protected_list = list(feat_protected.keys())
+        instance_feat_value = subgroup_instance[feat_protected_list].values
+        test_df_feat_protected = test_df[feat_protected_list].values
+        count = 0
+        for row in test_df_feat_protected:
+            if all(row == instance_feat_value):
+                count+=1
+        return count
+    
+    def count_instances_subgroup_feat(subgroup_instance, original_instances_df, feat):
+        """
+        Gets the amount of false instances in the feature group of the instances
+        """
+        subgroup_feat = subgroup_instance[feat]
+        original_instances_feat_df = original_instances_df[feat].values
+        count = 0
+        for row in original_instances_feat_df:
+            if row == subgroup_feat:
+                count+=1
+        return count
+
+    dataset_names = get_data_names(datasets)
+    for dataset_idx in range(len(datasets)):
+        data_str = datasets[dataset_idx]
+        data_name = dataset_names[data_str]
+        eval_alpha_01 = load_obj(f'{data_str}_CounterFair_dist_alpha_0.1_support_0.01_eval.pkl')
+        original_features = eval_alpha_01.raw_data_cols
+        eval_alpha_01_df = eval_alpha_01.cf_df
+        feat_protected = eval_alpha_01.feat_protected
+        sensitive_groups = list(np.unique(eval_alpha_01_df['Sensitive group']))
+        original_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
+        graph_nodes = list(range(len(original_cfs)))
+        eval_alpha_01_df = modify_graph_nodes(original_cfs, eval_alpha_01_df)
+        cf_dict, normal_cf_dict, instance_dict, normal_instance_dict = get_unique_cfs_instance_burden_dict(graph_nodes, eval_alpha_01_df, original_features)
+        original_instance_array = np.array(list(eval_alpha_01_df['centroid']))[:,:-1]
+        original_instance_df = pd.DataFrame(data=original_instance_array, columns=original_features)
+        data = get_data(data_str)
+        if original_cfs.shape[0] == len(sensitive_groups):
+            print('Subgroups equal the sensitive feature groups!')
+        else:
+            print('Subgroups NOT equal to the sensitive feature groups')
+        if 'adult' in data_str or 'dutch' in data_str:
+            test_df = data.test_df
+        else:
+            test_df = eval_alpha_01.test_df
+        for n in range(len(graph_nodes)):
+            subgroup_df = instance_dict[n]
+            normal_subgroup_df = normal_instance_dict[n]
+            cf_df = cf_dict[n]
+            normal_cf_df = normal_cf_dict[n]
+            subgroup_data = {}
+            subgroup_df = instance_dict[n]
+            if data_str == 'student' and n == 4:
+                subgroup_df = subgroup_df.iloc[:9]
+            feat_protected_list = list(feat_protected.keys())
+            subgroup_instance = subgroup_df.loc[0, feat_protected_list]
+            mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
+            aux_string = r'$S_{sub}^{%s} $ ' %n
+            string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
+            subgroup_data[string_subgroup] = mean_subgroup_burden
             for feat in feat_protected_list:
                 feat_count_false_neg_group = count_instances_subgroup_feat(subgroup_instance, original_instance_df, feat)
                 feat_count_group_total_instances = count_instances_group(subgroup_instance, test_df, feat)
