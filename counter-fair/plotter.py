@@ -2430,14 +2430,14 @@ def calculate_group_burden(data, subgroup_instance, instances_df, normal_instanc
     """
     type = 'L1_L0'
     arg_dict = {'dat': data, 'type':type}
-    feat_value = subgroup_instance[feat].values
+    feat_value = subgroup_instance[feat]
     group_fn_instances_idx = instances_df[instances_df[feat] == feat_value].index
     group_normal_fn_instances = normal_instances_df.loc[group_fn_instances_idx,:]
     group_normal_cfs = normal_cfs_df.loc[group_fn_instances_idx,:]
     group_burden_list = []
     for idx in group_fn_instances_idx:
-        normal_fn_instance = group_normal_fn_instances.loc[idx]
-        normal_cf = group_normal_cfs.loc[idx]
+        normal_fn_instance = group_normal_fn_instances.loc[idx].values
+        normal_cf = group_normal_cfs.loc[idx].values
         dist = distance_calculation_correction(normal_fn_instance, normal_cf, kwargs=arg_dict)
         group_burden_list.append(dist)
     return np.mean(group_burden_list)
@@ -2514,12 +2514,12 @@ def burden_per_subgroup_vs_group():
         original_cfs = np.unique(list(eval_alpha_01_df['cf'].values), axis=0)[:,0,:]
         graph_nodes = list(range(len(original_cfs)))
         eval_alpha_01_df = modify_graph_nodes(original_cfs, eval_alpha_01_df)
-        cf_dict, normal_cf_dict, instance_dict, normal_instance_dict = get_unique_cfs_instance_burden_dict(graph_nodes, eval_alpha_01_df, original_features)
+        cf_dict, normal_cf_dict, instance_dict, normal_instance_dict = get_unique_cfs_instance_burden_dict(graph_nodes, eval_alpha_01_df, original_features, normal_features)
         instances_array = np.array(list(eval_alpha_01_df['centroid']))[:,:-1]
         instances_df = pd.DataFrame(data=instances_array, columns=original_features)
-        normal_instances_array = np.array(list(eval_alpha_01_df['normal_centroid']))[:,:-1]
+        normal_instances_array = np.array(list(eval_alpha_01_df['normal_centroid']))
         normal_instances_df = pd.DataFrame(data=normal_instances_array, columns=normal_features)
-        normal_cfs_array = np.array(list(eval_alpha_01_df['normal_cf']))[:,:-1]
+        normal_cfs_array = np.array(list(eval_alpha_01_df['normal_cf']))
         normal_cfs_df = pd.DataFrame(data=normal_cfs_array, columns=normal_features)
         data = get_data(data_str)
         if original_cfs.shape[0] == len(sensitive_groups):
@@ -2536,7 +2536,6 @@ def burden_per_subgroup_vs_group():
             normal_cf_df = normal_cf_dict[n]
             subgroup_len = len(subgroup_df)
             subgroup_data = {}
-            subgroup_df = instance_dict[n]
             if data_str == 'student' and n == 4:
                 subgroup_df = subgroup_df.iloc[:9]
             feat_protected_list = list(feat_protected.keys())
@@ -2545,14 +2544,14 @@ def burden_per_subgroup_vs_group():
             aux_string = r'$G_{%s} $ ' %n
             string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_subgroup] = mean_subgroup_burden
-            for feat in feat_protected_list:
-                mean_group_burden = calculate_group_burden(subgroup_instance, instances_df, normal_instances_df, normal_cfs_df, feat)
+            for feat in feat_protected_list:             
+                mean_group_burden = calculate_group_burden(data, subgroup_instance, instances_df, normal_instances_df, normal_cfs_df, feat)
                 feat_value = subgroup_instance[feat]
                 feat_value_name = feat_protected[feat][feat_value]
                 string_to_add = f'{feat}: {feat_value_name}'
                 subgroup_data[string_to_add] = mean_group_burden
             fig, ax = plt.subplots()
-            ax.bar(subgroup_data.keys(), height=subgroup_data.values())
+            ax.barh(subgroup_data.keys(), width=subgroup_data.values())
             ax.set_title(data_name)
             ax.set_ylabel(r'Distance $d(X_{i},X´_{i})$ [L1 & L0]')
             ax.set_xlabel(r'Subgroups $G_n$ and Sensitive Groups $s_k$')
@@ -2668,7 +2667,7 @@ metric = 'proximity'
 # fnr_per_subgroup()
 # fnr_per_subgroup_vs_group()
 burden_per_subgroup()
-# burden_per_subgroup_vs_group()
+burden_per_subgroup_vs_group()
 # actionability_oriented_fairness_plot(datasets, methods_to_run)
 # effectiveness_across_methods(datasets, methods_to_run)
 # time_benchmark(datasets)
