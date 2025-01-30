@@ -2151,14 +2151,16 @@ def pie_chart_subgroup_relevance(datasets):
             elif data_str == 'student':
                 graph_nodes = [0, 1, 2, 4]
             for n in graph_nodes:
+                a = n
                 subgroup_df = instance_dict[n]
                 len_subgroup = len(subgroup_df)
                 feat_protected_list = list(feat_protected.keys())
                 subgroup_instance = subgroup_df.loc[0, feat_protected_list]
                 if data_str == 'student' and n == 4:
-                    aux_string = r'$G_{%s} $ ' %3
-                else:    
-                    aux_string = r'$G_{%s} $ ' %n
+                    a = 3
+                elif data_str == 'adult' and n > 8:
+                    a = n-1
+                aux_string = r'$G_{%s} $ ' %a
                 string_group = aux_string + f' ({len_subgroup})'
                 string_group_save = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({len_subgroup})'
                 subgroup_lengths[string_group] = len(eval_alpha_01_df[eval_alpha_01_df['graph_node'] == n])
@@ -2482,6 +2484,7 @@ def burden_per_subgroup():
         elif data_str == 'student':
             graph_nodes = [0, 1, 2, 4]
         for n in graph_nodes:
+            a = n
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
             normal_cf_df = normal_cf_dict[n]
@@ -2490,12 +2493,10 @@ def burden_per_subgroup():
             mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
             subgroup_len = len(subgroup_df)
             if data_str == 'student' and n == 4:
-                aux_string = r'$G_{%s} $ ' %3
+                a = 3
             elif data_str == 'adult' and n > 8:
                 a = n-1
-                aux_string = r'$G_{%s} $ ' %a
-            else:    
-                aux_string = r'$G_{%s} $ ' %n
+            aux_string = r'$G_{%s} $ ' %a
             string_group = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_group] = mean_subgroup_burden
         fig, ax = plt.subplots()
@@ -2552,6 +2553,7 @@ def burden_per_subgroup_vs_group():
         elif data_str == 'student':
             graph_nodes = [0, 1, 2, 4]
         for n in graph_nodes:
+            a = n
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
             normal_cf_df = normal_cf_dict[n]
@@ -2561,12 +2563,10 @@ def burden_per_subgroup_vs_group():
             subgroup_instance = subgroup_df.loc[0, feat_protected_list]
             mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
             if data_str == 'student' and n == 4:
-                aux_string = r'$G_{%s} $ ' %3
+                a = 3
             elif data_str == 'adult' and n > 8:
                 a = n-1
-                aux_string = r'$G_{%s} $ ' %a
-            else:    
-                aux_string = r'$G_{%s} $ ' %n
+            aux_string = r'$G_{%s} $ ' %a
             string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_subgroup] = mean_subgroup_burden
             for feat in feat_protected_list:             
@@ -2587,7 +2587,7 @@ def burden_per_subgroup_vs_group():
             #             wspace=0.1,
             #             hspace=0.1)
             plt.tight_layout()
-            plt.savefig(results_cf_plots_dir+f'Burden_per_subgroup_{n}_vs_group_{data_name}.pdf',format='pdf',dpi=400)
+            plt.savefig(results_cf_plots_dir+f'Burden_per_subgroup_{a}_vs_group_{data_name}.pdf',format='pdf',dpi=400)
 
 def effectiveness_fix_ares_facts(df, len_instances):
     """
