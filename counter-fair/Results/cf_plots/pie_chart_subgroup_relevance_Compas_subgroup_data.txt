@@ -1,0 +1,7 @@
+$G_{0} $ Race: African-American | Sex: Male (54)
+$G_{1} $ Race: African-American | Sex: Male (76)
+$G_{2} $ Race: African-American | Sex: Male (210)
+$G_{3} $ Race: African-American | Sex: Male (22)
+$G_{4} $ Race: African-American | Sex: Female (60)
+$G_{5} $ Race: Caucasian | Sex: Male (122)
+$G_{6} $ Race: Caucasian | Sex: Female (24)
