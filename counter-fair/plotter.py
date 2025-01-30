@@ -2562,6 +2562,9 @@ def burden_per_subgroup_vs_group():
             mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
             if data_str == 'student' and n == 4:
                 aux_string = r'$G_{%s} $ ' %3
+            elif data_str == 'adult' and n > 8:
+                a = n-1
+                aux_string = r'$G_{%s} $ ' %a
             else:    
                 aux_string = r'$G_{%s} $ ' %n
             string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
