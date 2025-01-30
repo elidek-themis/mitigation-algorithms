@@ -2472,7 +2472,7 @@ def burden_per_subgroup():
             test_df = eval_alpha_01.test_df
         if data_str == 'adult':
             graph_nodes = [2, 8, 9, 10, 14, 19, 24, 29, 52, 60]
-        for n in range(len(graph_nodes)):
+        for n in graph_nodes:
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
             normal_cf_df = normal_cf_dict[n]
@@ -2534,7 +2534,7 @@ def burden_per_subgroup_vs_group():
             test_df = eval_alpha_01.test_df
         if data_str == 'adult':
             graph_nodes = [2, 8, 9, 10, 14, 19, 24, 29, 52, 60]
-        for n in range(len(graph_nodes)):
+        for n in graph_nodes:
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
             normal_cf_df = normal_cf_dict[n]
