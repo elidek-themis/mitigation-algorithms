@@ -2146,15 +2146,22 @@ def pie_chart_subgroup_relevance(datasets):
                 subgroup_lengths[sensitive_group] = len(eval_alpha_01_df[eval_alpha_01_df['Sensitive group'] == sensitive_group])
         else:
             print('Subgroups NOT equal to the sensitive feature groups')
-            for n in range(len(graph_nodes)):
+            if data_str == 'adult':
+                graph_nodes = [2, 8, 10, 14, 19, 21, 24, 29, 52, 60]
+            elif data_str == 'student':
+                graph_nodes = [0, 1, 2, 4]
+            for n in graph_nodes:
                 subgroup_df = instance_dict[n]
                 len_subgroup = len(subgroup_df)
                 feat_protected_list = list(feat_protected.keys())
                 subgroup_instance = subgroup_df.loc[0, feat_protected_list]
-                aux_string = r'$G_{%s} $ ' %n
+                if data_str == 'student' and n == 4:
+                    aux_string = r'$G_{%s} $ ' %3
+                else:    
+                    aux_string = r'$G_{%s} $ ' %n
                 string_group = aux_string + f' ({len_subgroup})'
                 string_group_save = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({len_subgroup})'
-                subgroup_lengths[string_group] = len(eval_alpha_01_df[eval_alpha_01_df['graph_node'] == graph_nodes[n]])
+                subgroup_lengths[string_group] = len(eval_alpha_01_df[eval_alpha_01_df['graph_node'] == n])
                 string_groups_save.append(string_group_save)
         with open(results_cf_plots_dir+f'pie_chart_subgroup_relevance_{data_name}_subgroup_data.txt', mode='a', encoding='utf-8') as myfile:
             myfile.write('\n'.join(str(line) for line in string_groups_save))
@@ -2471,7 +2478,9 @@ def burden_per_subgroup():
         else:
             test_df = eval_alpha_01.test_df
         if data_str == 'adult':
-            graph_nodes = [2, 8, 9, 10, 14, 19, 24, 29, 52, 60]
+            graph_nodes = [2, 8, 10, 14, 19, 21, 24, 29, 52, 60]
+        elif data_str == 'student':
+            graph_nodes = [0, 1, 2, 4]
         for n in graph_nodes:
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
@@ -2480,7 +2489,10 @@ def burden_per_subgroup():
             subgroup_instance = subgroup_df.loc[0, feat_protected_list]
             mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
             subgroup_len = len(subgroup_df)
-            aux_string = r'$G_{%s} $ ' %n
+            if data_str == 'student' and n == 4:
+                aux_string = r'$G_{%s} $ ' %3
+            else:    
+                aux_string = r'$G_{%s} $ ' %n
             string_group = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_group] = mean_subgroup_burden
         fig, ax = plt.subplots()
@@ -2533,7 +2545,9 @@ def burden_per_subgroup_vs_group():
         else:
             test_df = eval_alpha_01.test_df
         if data_str == 'adult':
-            graph_nodes = [2, 8, 9, 10, 14, 19, 24, 29, 52, 60]
+            graph_nodes = [2, 8, 10, 14, 19, 21, 24, 29, 52, 60]
+        elif data_str == 'student':
+            graph_nodes = [0, 1, 2, 4]
         for n in graph_nodes:
             subgroup_df = instance_dict[n]
             normal_subgroup_df = normal_instance_dict[n]
@@ -2543,7 +2557,10 @@ def burden_per_subgroup_vs_group():
             feat_protected_list = list(feat_protected.keys())
             subgroup_instance = subgroup_df.loc[0, feat_protected_list]
             mean_subgroup_burden = calculate_subgroup_burden(data, normal_subgroup_df, normal_cf_df)
-            aux_string = r'$G_{%s} $ ' %n
+            if data_str == 'student' and n == 4:
+                aux_string = r'$G_{%s} $ ' %3
+            else:    
+                aux_string = r'$G_{%s} $ ' %n
             string_subgroup = aux_string + get_subgroup_name(feat_protected, subgroup_instance) + f' ({subgroup_len})'
             subgroup_data[string_subgroup] = mean_subgroup_burden
             for feat in feat_protected_list:             
@@ -2664,7 +2681,7 @@ metric = 'proximity'
 # proximity_fairness_across_alpha_counterfair(datasets)
 # burden_effectiveness_benchmark(datasets)
 # parallel_plots_alpha_01(datasets)
-# pie_chart_subgroup_relevance(datasets)
+pie_chart_subgroup_relevance(datasets)
 # fnr_per_subgroup()
 # fnr_per_subgroup_vs_group()
 burden_per_subgroup()
