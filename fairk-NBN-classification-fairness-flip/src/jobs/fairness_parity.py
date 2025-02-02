@@ -1,24 +1,28 @@
 import logging
 import os
 import shutil
-from collections import Counter, defaultdict
 import numpy as np
 import pandas as pd
-import omegaconf
-import sys
 from sklearn.neighbors import KNeighborsClassifier
+
 
 from src.dataloader.dataloader import DataLoader
 from src.config.schema import Config
 from src.jobs.evaluate import Evaluate
-from src.utils.general_utils import get_neighbor_statistics, get_negative_protected_values, check_column_value, \
-    group_sublists_by_shared_elements, filter_sublists_by_length, categorize_and_split_sublists, \
-    nth_length_of_sorted_lists, TrainerKey, Neighbor
+from src.utils.general_utils import get_negative_protected_values, check_column_value, TrainerKey, Neighbor, \
+    update_results_dict, rename_columns_
 from src.utils.preprocess_utils import encode_dataframe, split_df, get_xy, backward_regression, flip_value
 
 
 class FairnessParity:
     def __init__(self, config: Config):
+        self.reverse_index = None
+        self.t0 = None
+        self.y_train_sensitive_attr = None
+        self.y_train = None
+        self.x_train = None
+        self.total_protected_positive_flipped = None
+        self.total_dom_positive_flipped = None
         self.val_neighbors = []
         self.config = config
         self.experiment_name = self.config.experiment_name
@@ -41,10 +45,16 @@ class FairnessParity:
                 for root, dirs, files in os.walk(path):
                     for file in files:
                         os.remove(os.path.join(root, file))
-                    for dir in dirs:
-                        shutil.rmtree(os.path.join(root, dir))
+                    for directory in dirs:
+                        shutil.rmtree(os.path.join(root, directory))
 
     def _preprocess(self, df):
+        """
+            Preprocesses the dataset by encoding categorical features, selecting features,
+            splitting the data into training, validation, and test sets, and optionally excluding
+            the sensitive attribute.
+
+            """
         df, self.label_encoders = encode_dataframe(df)
 
         self.sensitive_class_value = int(self.label_encoders[self.config.data.sensitive_attribute.name].transform([self.config.data.sensitive_attribute.protected])[0])
@@ -62,8 +72,11 @@ class FairnessParity:
                                                 split_percent=self.config.basic.split_percent,
                                                 protected_attribute=self.config.data.sensitive_attribute.name,
                                                 val_data=self.config.basic.split_data.val_data,
-                                                resampling_train_set=self.config.basic.split_data[
-                                                    'resampling_train_set'], )
+                                                resampling_train_set=self.config.basic.split_data.resampling_train_set,
+                                                sensitive_class_value = self.sensitive_class_value,
+                                                dominant_class_value = self.dominant_class_value,
+                                                class_positive_value = self.class_positive_value,
+                                                class_negative_value = self.class_negative_value)
 
         self.x_train, self.y_train, self.y_train_sensitive_attr = get_xy(df=train_set,
                                                         sensitive_attribute=self.config.data.sensitive_attribute.name,
@@ -83,9 +96,22 @@ class FairnessParity:
         return self.x_train, self.x_val, self.x_test, self.y_train, self.y_val, self.y_test, self.y_train_sensitive_attr, self.y_val_sensitive_attr, self.y_test_sensitive_attr
 
 
-    def _train(self,sns=None):
+    def _train(self):
+        """
+           Trains a K-Nearest Neighbors (KNN) classifier using the training dataset,
+           makes predictions on the validation set, and computes key fairness-related metrics.
 
-        self.model = KNeighborsClassifier(n_neighbors=self.config.basic.neighbors)
+           Steps:
+           1. Initializes and trains a KNN model using Euclidean distance.
+           2. Predicts the class labels for the validation set.
+           3. Identifies protected and dominant class samples for negative predictions.
+           4. Computes the number of positive predictions for dominant and protected groups.
+
+           Returns:
+           None (updates instance attributes).
+           """
+
+        self.model = KNeighborsClassifier(n_neighbors=self.config.basic.neighbors,metric='euclidean')
         self.model.fit(self.x_train, self.y_train[self.class_attribute])
 
         self.pred_val = self.model.predict(self.x_val)
@@ -94,6 +120,7 @@ class FairnessParity:
         self.t1, self.t1_ids = get_negative_protected_values(self.pred_val, self.x_val, self.y_val_sensitive_attr,self.class_negative_value, self.dominant_class_value)
 
         self.sum_positive_pred_dom = len(get_negative_protected_values(self.pred_val, self.x_val, self.y_val_sensitive_attr,self.class_positive_value, self.dominant_class_value)[0])
+        self.sum_positive_pred_dom_innit = self.sum_positive_pred_dom
         self.sum_positive_pred_protected = len(get_negative_protected_values(self.pred_val, self.x_val, self.y_val_sensitive_attr,self.class_positive_value, self.sensitive_class_value)[0])
         self.sum_positive_val_dom = len(get_negative_protected_values(self.y_val, self.x_val, self.y_val_sensitive_attr, None,self.dominant_class_value)[0])
         self.sum_positive_val_protected = len(get_negative_protected_values(self.y_val, self.x_val, self.y_val_sensitive_attr, None,self.sensitive_class_value)[0])
@@ -101,9 +128,26 @@ class FairnessParity:
 
 
     def _eval(self,x_data,y_data, y_sensitive_attribute,k=None):
+        """
+        Evaluates the trained model on a given dataset.
+
+        Parameters:
+        x_data (pd.DataFrame): Feature dataset for evaluation.
+        y_data (pd.Series or pd.DataFrame): True labels corresponding to x_data.
+        y_sensitive_attribute (list): List of sensitive attribute values corresponding to x_data.
+        k (int, optional): Iteration count (if applicable for tracking in experiments).
+
+        Returns:
+        dict: A dictionary containing the following evaluation results:
+            - 'number_sensitive_attr_predicted_positive': Count of positive predictions for the sensitive group.
+            - 'pos_t0': Count of positive predictions within the negative protected class group (t0).
+            - 'number_dom_attr_predicted_positive': Count of positive predictions for the dominant group.
+            - 'number_indices_flipped': Number of flipped predictions in the negative protected class group.
+            - 'iteration': Iteration number (if provided).
+        """
         y_pred = self.model.predict(x_data)
         eval_results = dict()
-        eval = Evaluate(y_actual=y_data,
+        evl = Evaluate(y_actual=y_data,
                         y_pred= y_pred,
                         y_sensitive_attribute=y_sensitive_attribute,
                         class_attribute = self.config.data.class_attribute.name,
@@ -113,15 +157,25 @@ class FairnessParity:
                         class_negative_value = self.class_negative_value,
                         )
 
-        eval_results['number_sensitive_attr_predicted_positive'] = eval.number_sensitive_attr_predicted_positive
+        eval_results['number_sensitive_attr_predicted_positive'] = evl.number_sensitive_attr_predicted_positive
         eval_results['pos_t0'] = (self.model.predict(self.t0) == self.class_positive_value).sum()
-        eval_results['number_dom_attr_predicted_positive'] = eval.number_dom_attr_predicted_positive
+        eval_results['number_dom_attr_predicted_positive'] = evl.number_dom_attr_predicted_positive
         eval_results['number_indices_flipped'] = eval_results['pos_t0']
         eval_results['iteration'] = k
 
 
         return eval_results
     def remove_indices_from_train(self, indices):
+        """
+            Removes specified indices from the training dataset while maintaining
+            consistency across features, target labels, and sensitive attributes.
+
+            Parameters:
+            indices (int or list of int): Index or list of indices to be removed from the training set.
+
+            Returns:
+            None (updates self.x_train, self.y_train, and self.y_train_sensitive_attr).
+            """
         if not isinstance(indices, list):
             indices = [indices]
         indices = list(set(indices))
@@ -138,6 +192,20 @@ class FairnessParity:
         self.y_train_sensitive_attr = combined_df.iloc[:, -1].tolist()
 
     def _get_negative_neighbors_1by1_approach(self, negative_classified_protected_class=None,invert_back_to_orignal = False):
+        """
+            Identifies and removes nearest negative neighbors of negatively classified
+            protected class instances one by one, updating the model iteratively.
+
+            Parameters:
+            negative_classified_protected_class (pd.DataFrame, optional):
+                Subset of negatively classified protected class samples.
+                If None, these are computed dynamically.
+            invert_back_to_original (bool, optional):
+                If True, restores the training set to its original state after execution.
+
+            Returns:
+            list: Indices of negative neighbors removed from the training set.
+            """
         if negative_classified_protected_class is None:
             t0 = get_negative_protected_values(self.y_val, self.x_val, self.y_val_sensitive_attr,self.class_negative_value, self.sensitive_class_value)
         else:
@@ -149,7 +217,7 @@ class FairnessParity:
         for i in range(len(t0)):
             neighbors = []
             original_index = 0
-            while (True):
+            while True:
                 distance, index = self.model.kneighbors(t0.iloc[[i]])
                 index_to_be_removed = index[0].tolist()[0]
                 vallue = check_column_value(self.y_train, index_to_be_removed, self.config.data.class_attribute.name)
@@ -163,7 +231,7 @@ class FairnessParity:
                     t0_negative_neighbors.extend(same_distance_removal)
                     self._train()
 
-                    if invert_back_to_orignal == True:
+                    if invert_back_to_orignal:
                         self.x_train = original_xtrain
                         self.y_train = original_ytrain
                         self.y_train_sensitive_attr = original_y_train_sensitive_attr
@@ -174,6 +242,18 @@ class FairnessParity:
         return t0_negative_neighbors
 
     def _get_neighbors_with_same_distance(self,negative_classified_protected_class,neighbor_index):
+        """
+            Finds and returns indices of neighbors with the same distance as the specified neighbor,
+            but ensures that the neighbors are not classified as positive.
+
+            Parameters:
+            negative_classified_protected_class (pd.DataFrame): A DataFrame containing the negative
+                                                                 classified protected class sample(s) for which neighbors are to be found.
+            neighbor_index (int): Index of the reference neighbor whose distance is to be used as a target.
+
+            Returns:
+            list: A list of indices of neighbors with the same distance but not classified as positive.
+            """
         distance, index = self.model.kneighbors(negative_classified_protected_class, n_neighbors=350)
         index_position = np.where(index[0] == neighbor_index)[0]
         target_distance = distance[0][index_position]
@@ -185,6 +265,17 @@ class FairnessParity:
         return same_distance_removal
 
     def _get_negative_classified_protected_class_subset(self,df,n_neighbors=384):
+        """
+            Identifies and returns the subset of neighbors classified as negative for the given
+            DataFrame, based on a specified number of nearest neighbors.
+
+            Parameters:
+            df (pd.DataFrame): The input DataFrame for which the nearest neighbors are computed.
+            n_neighbors (int, optional): The number of nearest neighbors to consider for each sample. Default is 384.
+
+            Returns:
+            list: A list of lists, where each sublist contains indices of neighbors classified as negative.
+            """
         distances, indices = self.model.kneighbors(df, n_neighbors=n_neighbors,return_distance=True)
         flattened_array = distances.flatten()
 
@@ -207,8 +298,17 @@ class FairnessParity:
             negative_neighbors.append(new_sublist)
         return negative_neighbors
 
-# concise
     def _get_flip_counter(self,train_neighbors):
+        """
+            Counts the number of neighbors in the training set that are classified as negative.
+
+            Parameters:
+            train_neighbors (list): A list of indices representing the neighbors in the training set.
+
+            Returns:
+            int: The count of neighbors that are classified as negative.
+            """
+
         counter = 0
         for neighbor in train_neighbors:
             if check_column_value(self.y_train, neighbor, self.config.data.class_attribute.name) == self.class_negative_value:
@@ -272,8 +372,16 @@ class FairnessParity:
             k = k + 1
 
     def filter_out_t1(self,train_neighbors):
+        """
+            Filters out the T1 neighbors that are present in the given list of training neighbors.
 
+            Parameters:
+            train_neighbors (list): A list of indices representing the neighbors in the training set.
 
+            Returns:
+                - dom_attr_indexes: The indices of the filtered T1 neighbors.
+                - t1_ids: The corresponding T1 IDs for the filtered neighbors.
+            """
         distance, index = self.model.kneighbors(self.t1)
 
         filtered_t1 = [(lst, self.t1_ids[idx]) for idx, lst in enumerate(index)
@@ -282,6 +390,18 @@ class FairnessParity:
         return dom_attr_indexes , t1_ids
 
     def fill_dict_t1(self,reverse_index ,dom_attr_indexes, t1_ids,sensitive_attribute  ):
+        """
+        Fills the reverse index with Neighbor objects based on the provided T1 data.
+
+        Parameters:
+        reverse_index (dict): A dictionary that maps neighbor indices to NeighborContainers.
+        dom_attr_indexes (list): A list of lists, where each sublist contains indices of dominant attribute neighbors.
+        t1_ids (list): A list of T1 IDs corresponding to the neighbors.
+        sensitive_attribute (str): The name of the sensitive attribute.
+
+        Returns:
+        dict: The updated reverse index with the new Neighbor objects added.
+        """
         for neighbor_id, sublist in enumerate(dom_attr_indexes):
             # Initialize a Neighbor object
             neighbor = Neighbor(
@@ -296,14 +416,21 @@ class FairnessParity:
                 class_negative_value = self.class_negative_value
             )
             self.val_neighbors.append(neighbor)
-            # Add this Neighbor to all relevant NeighborContainers
             for key in sublist:
                 if key in reverse_index:
                     reverse_index[key].add_neighbor(neighbor)
         return reverse_index
 
     def get_reverse_index(self):
+        """
+        Retrieves the reverse index for the T0 neighbors by finding their nearest neighbors.
 
+        This method computes the nearest neighbors for the T0 set using the model and initializes
+        a reverse index mapping the neighbor indices to their corresponding NeighborContainers.
+
+        Returns:
+        dict: A dictionary (reverse_index) mapping neighbor indices to NeighborContainers.
+        """
         _, index = self.model.kneighbors(self.t0)
         reverse_index =self.initialize_train_dictionary(index,self.to_ids)
         return  reverse_index
@@ -311,11 +438,10 @@ class FairnessParity:
 
 
     def lebel_flip_attempt1(self):
+
         results_df = pd.DataFrame()
         reverse_index = self.get_reverse_index()
         reverse_index = dict(sorted(reverse_index.items(), key=lambda item: len(item[1]), reverse=True))
-        #TODO : reverse index need to be nore dynamic
-        #TODO : create a custom int class for the val-points or find an already implemented one that matches to the requirements
 
         k=0
         results_dict = self._eval(k)
@@ -334,6 +460,20 @@ class FairnessParity:
                 break
 
     def initialize_train_dictionary(self,indexes,ids):
+        """
+            Initializes a dictionary of training neighbors and adds them to their respective NeighborContainers.
+
+            This method processes a list of neighbor indices and IDs, filters out T1 neighbors,
+            and creates `Neighbor` objects for each index. It also updates the reverse index and
+            assigns each neighbor to the corresponding `NeighborContainer`.
+
+            Parameters:
+            indexes (list): A list of lists, where each sublist contains neighbor indices.
+            ids (list): A list of unique IDs corresponding to the neighbor indices.
+
+            Returns:
+            dict: A dictionary mapping each neighbor index to its corresponding `NeighborContainer`.
+            """
         unique_set = set()
         for lst in indexes:
             unique_set.update(lst)
@@ -349,11 +489,10 @@ class FairnessParity:
                 dominant_class_value=self.dominant_class_value,
                 class_positive_value=self.class_positive_value,
                 class_negative_value=self.class_negative_value,
-                include_dominant_attribute= self.config.basic.weight.include_dominant_attribute)  # Create a new NeighborContainer object
+                include_dominant_attribute= self.config.basic.weight.include_dominant_attribute)
                 dictionary[container_key] = container
 
         for neighbor_id, sublist in enumerate(indexes):
-            # Initialize a Neighbor object
             neighbor = Neighbor(
                 index=ids[neighbor_id],
                 counter_for_flip= self._get_flip_counter(sublist),
@@ -367,23 +506,42 @@ class FairnessParity:
 
             )
             self.val_neighbors.append(neighbor)
-            # Add this Neighbor to all relevant NeighborContainers
             for key in sublist:
                 if key in dictionary:
                     dictionary[key].add_neighbor(neighbor)
         dictionary =self.fill_dict_t1(dictionary,dom_attr_indexes, t1_ids,self.dominant_class_value)
         return dictionary
 
-    def make_train_label_postitive(self,TrainerKey):
+    def make_train_label_positive(self, TrainerKey):
+        """
+          Adjusts the `counter_for_flip` of neighbors associated with the given TrainerKey.
+          If the counter is reduced below zero, a warning is logged.
+          Finally, the TrainerKey is removed from the reverse index.
+
+          Parameters:
+          TrainerKey (str/int): The key associated with the Trainer in the reverse index.
+          """
         for neighbor in self.reverse_index[TrainerKey].neighbors :
-            if neighbor.counter_for_flip == 1:
-                pass
-            else:
-                neighbor.counter_for_flip -= 1
+            neighbor.counter_for_flip -= 1
+            if neighbor.counter_for_flip < 0:
+                logging.warning('Counter flip for neighbor {} is negative'.format(neighbor.index))
         self.reverse_index.pop(TrainerKey, None)  # None prevents KeyError if key doesn't exist
 
     def get_difference_objective(self, pred_sensitive_flipped=None, pred_dom_flipped = None):
+        """
+            Calculates the difference in positive predictions between the protected and dominant classes.
+            The method updates internal counters for positive predictions for both classes
+            and computes the difference as a ratio of positive predictions for the protected class
+            to those for the dominant class.
 
+            Parameters:
+            pred_sensitive_flipped (int, optional): Number of positive predictions flipped for the protected class.
+            pred_dom_flipped (int, optional): Number of positive predictions flipped for the dominant class.
+
+            Returns:
+            float: The difference objective, calculated as the ratio of positive predictions for the protected class
+                   divided by the positive values for the protected class, minus the ratio for the dominant class.
+            """
         self.sum_positive_pred_dom += pred_dom_flipped or 0
         self.sum_positive_pred_protected += pred_sensitive_flipped or 0
 
@@ -393,6 +551,18 @@ class FairnessParity:
         return diff
 
     def _get_current_flips(self):
+        """
+            Computes the difference in the number of flipped positive predictions between
+            the protected and dominant classes compared to the previous state.
+
+            The method updates the total flipped positive counters for both classes and
+            calculates the change (delta) in the number of flips for each class since the last call.
+
+            Returns:
+                - The difference in flipped positive predictions for the protected class (`curr_protected`).
+                - The difference in flipped positive predictions for the dominant class (`curr_dom`).
+            """
+
         prev_protected = self.total_protected_positive_flipped
         prev_dom    = self.total_dom_positive_flipped
         self.total_protected_positive_flipped, self.total_dom_positive_flipped = self.get_flipped_positive_counter()
@@ -400,83 +570,131 @@ class FairnessParity:
         curr_dom = self.total_dom_positive_flipped - prev_dom
         return curr_protected, curr_dom
 
-    def update_results_dict(self, number_sensitive_attr_predicted_positive=None, number_sensitive_attr_predicted_negative=None,
-                            number_dom_attr_predicted_positive=None, number_sensitive_attributes_flipped=None ,sum_sa_indices_flipped=None, iteration=None):
-        eval_results = dict()
-        eval_results['number_sensitive_attr_predicted_positive'] = number_sensitive_attr_predicted_positive
-        eval_results['number_sensitive_attr_predicted_negative'] = number_sensitive_attr_predicted_negative
-        eval_results['number_dom_attr_predicted_positive'] = number_dom_attr_predicted_positive
-        eval_results['number_sensitive_attributes_flipped'] = number_sensitive_attributes_flipped
-        eval_results['sum_sa_indices_flipped'] = sum_sa_indices_flipped
-        eval_results['train_val_flipped'] = iteration
-        return eval_results
+
 
     def label_flip(self):
-        #TODO: get results df
+        """
+            This function executes the process of flipping labels in the training dataset tracks the progress of label flips and
+            stores the results for each iteration.
+
+            The process involves the following:
+            1. Initializing the results DataFrame.
+            2. Performing label flips iteratively while the objective condition is met.
+            3. Updating the metrics and storing the results.
+
+            Returns:
+                - A DataFrame with the results of each iteration (label flips statistics).
+                - A list of the objective keys (train indices) used for label flipping.
+            """
         results_df = pd.DataFrame()
         train_indexer = []
         self.reverse_index = self.get_reverse_index()
         self.total_protected_positive_flipped, self.total_dom_positive_flipped = self.get_flipped_positive_counter() #should be 0
-        eval_results = self.update_results_dict(number_sensitive_attr_predicted_positive =self.sum_positive_pred_protected,
-                                             number_sensitive_attr_predicted_negative = len(self.t0),
-                                             number_dom_attr_predicted_positive = self.sum_positive_pred_dom,
-                                             number_sensitive_attributes_flipped = self.total_protected_positive_flipped,
-                                             sum_sa_indices_flipped = self.total_protected_positive_flipped,
-                                             iteration = len(train_indexer)+1)
+        eval_results = update_results_dict(number_sensitive_attr_predicted_positive =self.sum_positive_pred_protected,
+                                           number_sensitive_attr_predicted_negative = len(self.t0),
+                                           number_dom_attr_predicted_positive = self.sum_positive_pred_dom,
+                                           number_sensitive_attributes_flipped = self.total_protected_positive_flipped,
+                                           number_flipped=self.total_protected_positive_flipped + self.total_dom_positive_flipped,
+                                           sum_sa_indices_flipped = self.total_protected_positive_flipped,
+                                           sum_indices_flipped=0,
+                                           iteration = len(train_indexer)+1)
+        results_df = results_df._append(eval_results, ignore_index=True)
 
-        summm = 0
-        diff = self.get_difference_objective()
-        while(self._objective_checker()):
+        while self._objective_checker():
+            if not self.reverse_index :
+                break
             objective_key = self._get_weighted_key()
             train_indexer.append(objective_key)
 
-            self.make_train_label_postitive(objective_key)
+            self.make_train_label_positive(objective_key)
 
             curr_protected_flips, curr_dom_flips = self._get_current_flips()
             diff = self.get_difference_objective(curr_protected_flips,curr_dom_flips)
-            eval_results = self.update_results_dict(
+            eval_results = update_results_dict(
                 number_sensitive_attr_predicted_positive=self.sum_positive_pred_protected  ,
                 number_sensitive_attr_predicted_negative=len(self.t0)- self.total_protected_positive_flipped ,
                 number_dom_attr_predicted_positive= self.sum_positive_pred_dom + self.total_dom_positive_flipped,
                 number_sensitive_attributes_flipped=self.total_protected_positive_flipped,
+                number_flipped = self.total_protected_positive_flipped + self.total_dom_positive_flipped,
                 sum_sa_indices_flipped=curr_protected_flips,
+                sum_indices_flipped = curr_protected_flips + curr_dom_flips,
                 iteration=len(train_indexer))
             results_df = results_df._append(eval_results, ignore_index=True)
         results_df.to_csv(self.local_dir_res + 'most_common_flip_results.csv', index=False)
         return results_df , train_indexer
 
     def _get_weighted_key(self):
-        if self.config.basic.weight.second_weight:
-            max_weight = float('-inf')
-            keys_with_max_weight = []
+        """
+            Retrieves the key with the highest weight from the reverse index, based on the specified weight configuration.
 
-            for k, item in self.reverse_index.items():
-                if item.weight > max_weight:
-                    max_weight, keys_with_max_weight = item.weight, [item]
-                elif item.weight == max_weight:
-                    keys_with_max_weight.append(item)
+            This method iterates over the `reverse_index` to find the item with the maximum weight. The weight is calculated
+            depending on whether the configuration includes a dominant attribute or a secondary weight. If multiple items
+            have the same weight, the method will return the one with the highest primary weight.
 
-            result_item = min(keys_with_max_weight, key=lambda k: item.secondary_weight).index
-        else:
-            result_item = max(self.reverse_index, key=lambda k: self.reverse_index[k].weight)
+            The method supports the following configurations:
+            - If `include_dominant_attribute` is enabled, the weight is the sum of the primary and secondary weights.
+            - If `second_weight` is enabled, the weight is the difference between the primary and secondary weights.
+            - If neither is enabled, the weight is just the primary weight.
+
+            Returns:
+                result_item (int): The index of the item in the `reverse_index` with the highest calculated weight.
+                                   In case of ties, the item with the higher primary weight is selected.
+            """
+        max_weight = float('-inf')
+        keys_with_max_weight = []
+
+        for k, item in self.reverse_index.items():
+            item_weight = item.weight  if self.config.basic.weight.include_dominant_attribute else item.weight - item.secondary_weight if self.config.basic.weight.second_weight else item.weight
+            if item_weight  > max_weight:
+                max_weight, keys_with_max_weight = item_weight, [item]
+            elif item_weight == max_weight:
+                keys_with_max_weight.append(item)
+
+        result_item = max(keys_with_max_weight, key=lambda k: item.weight).index
+
         return result_item
 
 
     def _objective_checker(self):
+        """
+            Checks if the current objective condition has been met based on the affirmative action policy or difference threshold.
+
+            This method evaluates the current state of the model with respect to the predefined objective condition. The condition
+            is determined by the configuration's `affirmative_action` setting and a difference threshold percentage.
+            The method returns `True` if the objective condition is satisfied, otherwise it returns `False`.
+
+            The check is based on two conditions:
+            1. If `affirmative_action` is enabled:
+               - The method calculates the allowed difference as a percentage of the initial number of positive predictions for the dominant class.
+               - It returns `True` if the difference between the initial dominant class predictions and the protected class predictions is greater than or equal to the allowed difference.
+            2. If `affirmative_action` is not enabled:
+               - The method calculates the difference objective (using `get_difference_objective()`), and compares it to the threshold (adjusted by a small value of 0.005).
+               - It returns `True` if the difference is smaller than the threshold, and `False` otherwise.
+
+            Returns:
+                bool: `True` if the objective condition is satisfied, `False` otherwise.
+            """
         if self.config.basic.condition.affirmative_action:
-            allowed_difference = (self.sum_positive_pred_dom * self.config.basic.condition.difference_percentage) // 100
-            return self.sum_positive_pred_dom - self.sum_positive_pred_protected >= allowed_difference
+            allowed_difference = (self.sum_positive_pred_dom_innit * self.config.basic.condition.difference_percentage) // 100
+            return self.sum_positive_pred_dom_innit - self.sum_positive_pred_protected >= allowed_difference
         else:
             threshold = self.config.basic.condition.difference_percentage / 100
             diff = self.get_difference_objective()
-            return abs(diff) >= threshold
-
-
-
-
-
+            return diff < threshold + 0.005
 
     def get_flipped_positive_counter(self):
+        """
+            Counts the number of positive-classified instances that have been flipped for both the protected and dominant class attributes.
+
+            This method iterates through the list of validation neighbors (`self.val_neighbors`) and counts how many instances
+            have been predicted as the positive class (`self.class_positive_value`). The counts are divided into two categories:
+            1. `total_protected_positive`: The number of flipped positive instances belonging to the sensitive (protected) class.
+            2. `total_dom_positive`: The number of flipped positive instances belonging to the dominant class.
+
+            Returns:
+                    - `total_protected_positive` (int): The number of flipped positive instances for the protected class.
+                    - `total_dom_positive` (int): The number of flipped positive instances for the dominant class.
+            """
         total_protected_positive = 0
         total_dom_positive = 0
         for neighbor in self.val_neighbors:
@@ -495,10 +713,14 @@ class FairnessParity:
         self._preprocess(df)
         self._train()
         reslts_df , train_indexer =self.label_flip()
-        self.y_train = flip_value(self.y_train,train_indexer,self.class_positive_value,self.config.data.class_attribute.name)
-        self._train() #Retrain
-        test = self._eval(self.x_val, self.y_val, self.y_val_sensitive_attr, k=None) #Test
-        k=1
+        rename_columns_(reslts_df,self.local_dir_res + 'most_common_flip_results_doc.csv') and self.config.csv_to_word
 
-
+        return reslts_df, train_indexer
+'''
+        for i in train_indexer:
+            self.y_train = flip_value(self.y_train,i,self.class_positive_value,self.config.data.class_attribute.name)
+            self._train() #Retrain
+            test = self._eval(self.x_val, self.y_val, self.y_val_sensitive_attr, k=None) #Test
+            k=1
+'''
 

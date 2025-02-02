@@ -3,12 +3,12 @@ defaults:
   - override hydra/hydra_logging: none
   - override hydra/job_logging: none
 data:
-  load_from: "data/diabetic_data_wtarget.csv"
+  load_from: "data/red_blue_dataset.csv"
   results_path : "results/"
   plot_path : "plots/"
   sensitive_attribute :
-    name: 'Sex'
-    protected: 'female'
+    name: 'color'
+    protected: 'red'
   class_attribute :
     name: 'class'
     positive_value: 1 #1 or 2 / good or bad
@@ -16,7 +16,7 @@ data:
 
 basic:
   feature_selection : False
-  exclude_sensitive_attribute : False
+  exclude_sensitive_attribute : true
   split_data:
     val_data : True
     resampling_train_set : False
@@ -27,10 +27,11 @@ basic:
     affirmative_action: true
     difference_percentage: 0
   weight:
-    include_dominant_attribute: false
-    second_weight: false
+    include_dominant_attribute: true
+    second_weight: true
 
-experiment_name: "diabetic_data_no_ada"
+experiment_name: "test"
+csv_to_word : true
 
 hydra:
   output_subdir: /data

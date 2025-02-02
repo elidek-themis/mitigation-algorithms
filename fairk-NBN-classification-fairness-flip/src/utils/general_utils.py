@@ -23,6 +23,21 @@ def get_neighbor_statistics(index, df, target_column):
         return "The specified index or column does not exist in the DataFrame."
 
 def get_negative_protected_values(y_val,x_val,sensitive_attr_list,class_negative_value,sensitive_class_value):
+    """
+        Extracts samples from x_val where the target variable (y_val) corresponds to the  class
+        and the sensitive attribute matches the specified sensitive class value.
+
+        Parameters:
+        y_val (pd.DataFrame, np.ndarray, or list): The target variable values.
+        x_val (pd.DataFrame): The feature dataset.
+        sensitive_attr_list (list): A list of sensitive attribute values corresponding to x_val.
+        class_negative_value (any): The value representing the negative class.
+        sensitive_class_value (any): The value representing the sensitive class.
+
+        Returns:
+            - pd.DataFrame: The subset of x_val matching the negative class and sensitive attribute.
+            - pd.Index: The index values of the selected subset.
+        """
     y_val = y_val.to_numpy().ravel() if isinstance(y_val, pd.DataFrame) else y_val
     if class_negative_value == None:
         mask_y_val = np.ones_like(y_val, dtype=bool)
@@ -57,27 +72,21 @@ def check_column_value(df, index, column_name):
         return "Index out of range."
 
 def group_sublists_by_shared_elements(n, list_of_lists):
-    # Step 1: Filter out sublists with the specified length 'n'
     filtered_sublists = [lst for lst in list_of_lists if len(lst) == n]
 
-    # Step 2: Create empty groups dynamically based on the length 'n'
     groups = [[] for _ in range(n + 1)]  # n+1 groups for 0 to n shared elements
 
-    # Step 3: Compare each sublist with others to group by shared elements
     while filtered_sublists:
         current = filtered_sublists.pop(0)  # Take the first sublist
 
-        # Temporary lists for the current sublist to track grouped elements
         current_groups = [[] for _ in range(n + 1)]
         current_groups[n].append(current)  # Start by placing in "all shared" group
 
-        # Compare current sublist with remaining ones
         for sublist in filtered_sublists[:]:
             shared_elements = len(set(current) & set(sublist))  # Count shared elements
             current_groups[shared_elements].append(sublist)  # Group by shared count
             filtered_sublists.remove(sublist)  # Remove after grouping
 
-        # Add the grouped sublists into the final groups
         for i in range(n + 1):
             if current_groups[i]:
                 groups[i].append(current_groups[i])
@@ -88,16 +97,12 @@ def filter_sublists_by_length(lst, length):
     return [sublist for sublist in lst if len(sublist) == length]
 
 def categorize_and_split_sublists(sublists):
-    # Determine the length of sublists based on the first sublist
     sublist_length = len(sublists[0]) if sublists else 0
 
-    # Initialize dictionary for categories dynamically
     result = {i: [] for i in range(sublist_length + 1)}
 
-    # Track which sublists have already been categorized
     categorized = [False] * len(sublists)
 
-    # Compare each pair of sublists only once
     for i in range(len(sublists)):
         if categorized[i]:  # Skip if already categorized
             continue
@@ -105,24 +110,18 @@ def categorize_and_split_sublists(sublists):
         sublist1 = set(sublists[i])
         matched = False
 
-        # Check for matches with other sublists
         for j in range(i + 1, len(sublists)):
             if categorized[j]:
                 continue
-
             sublist2 = set(sublists[j])
             shared_elements = sublist1.intersection(sublist2)
-
-            # Count the number of shared elements
             shared_count = len(shared_elements)
             if shared_count == sublist_length:
-                # All elements are shared; no differences
                 result[sublist_length].append([list(shared_elements), np.nan])
                 categorized[i] = True
                 categorized[j] = True
                 matched = True
             elif 1 <= shared_count < sublist_length:
-                # Some elements are shared, find the different ones
                 diff1 = list(sublist1 - shared_elements)
                 diff2 = list(sublist2 - shared_elements)
                 result[shared_count].append([list(shared_elements), diff1 + diff2])
@@ -130,8 +129,7 @@ def categorize_and_split_sublists(sublists):
                 categorized[j] = True
                 matched = True
 
-        # If no matches were found, categorize as 0
-        if not matched:
+        if not matched:  #no matches were found, categorize as 0
             result[0].append(sublists[i])
             categorized[i] = True
 
@@ -143,6 +141,21 @@ def nth_length_of_sorted_lists(lists, n):
     return len(sorted_lists[n])
 
 class Neighbor:
+    """
+        Represents a neighbor instance in the classification model.
+
+        Attributes:
+            index (int): The unique identifier of the neighbor.
+            counter_for_flip (int): The number of times this neighbor has been flipped in classification.
+            sensitive_attribute (any, optional): The sensitive attribute associated with the neighbor.
+            train_neighbors (list, optional): A list of neighboring training instances.
+            kneighbors (int): The number of neighbors considered in classification.
+            sensitive_class_value (any, optional): The value representing the sensitive class.
+            dominant_class_value (any, optional): The value representing the dominant class.
+            class_positive_value (any, optional): The value representing a positive classification.
+            class_negative_value (any, optional): The value representing a negative classification.
+
+        """
     def __init__(self, index, counter_for_flip, sensitive_attribute=None, train_neighbors=None,
                  kneighbors=3
                  , sensitive_class_value=None, dominant_class_value=None, class_positive_value=None,
@@ -169,6 +182,19 @@ class Neighbor:
         return f"Val_Neighbor({self.index})"
 
 class TrainerKey:
+    """
+        Represents a key entity in the training process, storing neighbors and their attributes.
+
+        Attributes:
+            index (int, optional): The unique identifier for the trainer key.
+            sensitive_class_value (any, optional): The value representing the sensitive class.
+            dominant_class_value (any, optional): The value representing the dominant class.
+            class_positive_value (any, optional): The value representing a positive classification.
+            class_negative_value (any, optional): The value representing a negative classification.
+            include_dominant_attribute (bool): Flag indicating whether to include dominant attribute weighting.
+            neighbors (list): A list of neighboring `Neighbor` objects.
+
+        """
     def __init__(self, index=None, sensitive_class_value=None, dominant_class_value=None, class_positive_value=None,
                  class_negative_value=None,include_dominant_attribute=False):
         self.sensitive_class_value = sensitive_class_value
@@ -183,10 +209,9 @@ class TrainerKey:
     def weight(self):
         sum= 0
         for neighbor in self.neighbors:
-            if neighbor.sensitive_attribute == self.sensitive_class_value:
+            if neighbor.sensitive_attribute == self.sensitive_class_value and neighbor.predicted_label != self.class_positive_value:
                 sum += 1/ neighbor.counter_for_flip
-            elif neighbor.sensitive_attribute == self.dominant_class_value and  self.include_dominant_attribute:
-                sum += -1/ neighbor.counter_for_flip
+
 
         return sum
 
@@ -194,11 +219,9 @@ class TrainerKey:
     def secondary_weight(self):
         sum = 0
         for neighbor in self.neighbors:
-            if neighbor.sensitive_attribute == self.dominant_class_value:
+            if neighbor.sensitive_attribute == self.dominant_class_value and neighbor.predicted_label != self.class_positive_value:
                 sum += 1 / neighbor.counter_for_flip
         return sum
-
-
 
     @property
     def sum_positive_protected_attr(self):
@@ -216,27 +239,77 @@ class TrainerKey:
                 sum += 1
         return sum
 
-#TODO: sum_positive_dom_attr
-    # List to hold references to Neighbor objects
-
     def add_neighbor(self, neighbor):
-        """Add a Neighbor to the container."""
         self.neighbors.append(neighbor)
 
     def __iter__(self):
-        """Make the container iterable."""
         return iter(self.neighbors)
 
     def __getitem__(self, index):
-        """Allow access by index."""
         return self.neighbors[index]
 
     def __len__(self):
-        """Return the number of neighbors."""
         return len(self.neighbors)
 
     def __repr__(self):
-        """Provide a string representation of the container."""
-        return f"Train_Neighbor({self.index})"
+        return f"train_neighbor({self.index})"
+
+
+def update_results_dict(number_sensitive_attr_predicted_positive=None, number_sensitive_attr_predicted_negative=None,
+                        number_dom_attr_predicted_positive=None, number_sensitive_attributes_flipped=None ,number_flipped=None,sum_sa_indices_flipped=None,sum_indices_flipped=None, iteration=None):
+    """
+       Creates and returns a dictionary containing evaluation results.
+
+       Args:
+           number_sensitive_attr_predicted_positive (int, optional): Count of sensitive attributes predicted as positive.
+           number_sensitive_attr_predicted_negative (int, optional): Count of sensitive attributes predicted as negative.
+           number_dom_attr_predicted_positive (int, optional): Count of dominant attributes predicted as positive.
+           number_sensitive_attributes_flipped (int, optional): Count of sensitive attributes that were flipped.
+           number_flipped (int, optional): Total count of flipped labels.
+           sum_sa_indices_flipped (int, optional): Sum of sensitive attribute indices that were flipped.
+           sum_indices_flipped (int, optional): Sum of all indices that were flipped.
+           iteration (int, optional): Current iteration number in the  process.
+
+       Returns:
+           dict: A dictionary containing evaluation metrics.
+       """
+    eval_results = dict()
+    eval_results['number_sensitive_attr_predicted_positive'] = number_sensitive_attr_predicted_positive
+    eval_results['number_sensitive_attr_predicted_negative'] = number_sensitive_attr_predicted_negative
+    eval_results['number_dom_attr_predicted_positive'] = number_dom_attr_predicted_positive
+    eval_results['number_sensitive_attributes_flipped'] = number_sensitive_attributes_flipped
+    eval_results['number_flipped'] = number_flipped
+    eval_results['sum_sa_indices_flipped'] = sum_sa_indices_flipped
+    eval_results['sum_indices_flipped'] = sum_indices_flipped
+    eval_results['train_val_flipped'] = iteration
+    return eval_results
+
+
+def rename_columns_(df,path):
+    """
+        Renames specific columns in the given DataFrame and saves the modified DataFrame as a CSV file.
+
+        Args:
+            df (pd.DataFrame): The input DataFrame to be modified.
+            path (str): The file path where the modified DataFrame will be saved.
+
+        Returns:
+            None
+        """
+    df =df.copy()
+    rename_dict = {
+        'number_sensitive_attr_predicted_positive': 'Number of sensitive attributes classified positive',
+        'number_sensitive_attr_predicted_negative': 'Number of sensitive attributes classified negative',
+        'number_dom_attr_predicted_positive': 'Number of dominant attributes classified positive',
+        'number_sensitive_attributes_flipped': 'Number of sensitive attributes flipped',
+        'number_flipped':'Number of validation point flipped',
+        'sum_sa_indices_flipped': 'Total number of sensitive attributes flipped',
+        'sum_indices_flipped': 'Total number of validation points flipped',
+        'train_val_flipped':'Total number of train neighbors flipped',
+
+    }
+    df = df.rename(columns=rename_dict)
+    df.to_csv(path, index=False)
+
 
 
