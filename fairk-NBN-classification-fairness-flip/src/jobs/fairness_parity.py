@@ -8,7 +8,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from src.config.schema import Config
 from src.jobs.evaluate import Evaluate
 from src.utils.general_utils import get_negative_protected_values, check_column_value, TrainerKey, Neighbor, \
-    update_results_dict, rename_columns_
+    update_results_dict, rename_columns_, check_data_schema
 from src.utils.preprocess_utils import encode_dataframe, split_df, get_xy, backward_regression, flip_value
 
 
@@ -30,6 +30,7 @@ class FairnessParity:
                                             load_from = None,
                                             data = None,
                                             experiment_name="fairknn",
+                                            return_model =False,
                                             local_dir_res="results/",
                                             local_dir_plt="plots/",
                                             csv_to_word = False):
@@ -44,6 +45,7 @@ class FairnessParity:
         if config == None:
             self.knn_neighbors = knn_neighbors
             self.experiment_name = experiment_name
+            self.return_model = return_model
             self.local_dir_res = self.experiment_name + '/' + local_dir_res
             self.local_dir_plt = self.experiment_name + '/' + local_dir_plt
             self.sensitive_attribute = sensitive_attribute
@@ -91,20 +93,22 @@ class FairnessParity:
         self.class_negative_value = None
         self.label_encoders = {}
         self.features = None
-        paths = [self.local_dir_res, self.local_dir_plt]
-        for path in paths:
-            if not os.path.exists(path):
-                os.makedirs(path)
-            else:
-                for root, dirs, files in os.walk(path):
-                    for file in files:
-                        os.remove(os.path.join(root, file))
-                    for directory in dirs:
-                        shutil.rmtree(os.path.join(root, directory))
+        if self.experiment_name is not  None :
+            paths = [self.local_dir_res, self.local_dir_plt]
+            for path in paths:
+                if not os.path.exists(path):
+                    os.makedirs(path)
+                else:
+                    for root, dirs, files in os.walk(path):
+                        for file in files:
+                            os.remove(os.path.join(root, file))
+                        for directory in dirs:
+                            shutil.rmtree(os.path.join(root, directory))
 
     def _dataloader(self):
         df = pd.read_csv(self.load_from)
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+        check_data_schema(df,self.class_attribute,self.sensitive_attribute,)
         return df
 
 
@@ -649,15 +653,16 @@ class FairnessParity:
         train_indexer = []
         self.reverse_index = self.get_reverse_index()
         self.total_protected_positive_flipped, self.total_dom_positive_flipped = self.get_flipped_positive_counter() #should be 0
-        eval_results = update_results_dict(number_sensitive_attr_predicted_positive =self.sum_positive_pred_protected,
-                                           number_sensitive_attr_predicted_negative = len(self.t0),
-                                           number_dom_attr_predicted_positive = self.sum_positive_pred_dom,
-                                           number_sensitive_attributes_flipped = self.total_protected_positive_flipped,
-                                           number_flipped=self.total_protected_positive_flipped + self.total_dom_positive_flipped,
-                                           sum_sa_indices_flipped = self.total_protected_positive_flipped,
-                                           sum_indices_flipped=0,
-                                           iteration = len(train_indexer)+1)
-        results_df = results_df._append(eval_results, ignore_index=True)
+        if self.experiment_name is not None:
+            eval_results = update_results_dict(number_sensitive_attr_predicted_positive =self.sum_positive_pred_protected,
+                                               number_sensitive_attr_predicted_negative = len(self.t0),
+                                               number_dom_attr_predicted_positive = self.sum_positive_pred_dom,
+                                               number_sensitive_attributes_flipped = self.total_protected_positive_flipped,
+                                               number_flipped=self.total_protected_positive_flipped + self.total_dom_positive_flipped,
+                                               sum_sa_indices_flipped = self.total_protected_positive_flipped,
+                                               sum_indices_flipped=0,
+                                               iteration = len(train_indexer)+1)
+            results_df = results_df._append(eval_results, ignore_index=True)
 
         while self._objective_checker():
             if not self.reverse_index :
@@ -669,17 +674,20 @@ class FairnessParity:
 
             curr_protected_flips, curr_dom_flips = self._get_current_flips()
             diff = self.get_difference_objective(curr_protected_flips,curr_dom_flips)
-            eval_results = update_results_dict(
-                number_sensitive_attr_predicted_positive=self.sum_positive_pred_protected  ,
-                number_sensitive_attr_predicted_negative=len(self.t0)- self.total_protected_positive_flipped ,
-                number_dom_attr_predicted_positive= self.sum_positive_pred_dom + self.total_dom_positive_flipped,
-                number_sensitive_attributes_flipped=self.total_protected_positive_flipped,
-                number_flipped = self.total_protected_positive_flipped + self.total_dom_positive_flipped,
-                sum_sa_indices_flipped=curr_protected_flips,
-                sum_indices_flipped = curr_protected_flips + curr_dom_flips,
-                iteration=len(train_indexer))
-            results_df = results_df._append(eval_results, ignore_index=True)
-        results_df.to_csv(self.local_dir_res + 'most_common_flip_results.csv', index=False)
+            if self.experiment_name is not None:
+                eval_results = update_results_dict(
+                    number_sensitive_attr_predicted_positive=self.sum_positive_pred_protected  ,
+                    number_sensitive_attr_predicted_negative=len(self.t0)- self.total_protected_positive_flipped ,
+                    number_dom_attr_predicted_positive= self.sum_positive_pred_dom + self.total_dom_positive_flipped,
+                    number_sensitive_attributes_flipped=self.total_protected_positive_flipped,
+                    number_flipped = self.total_protected_positive_flipped + self.total_dom_positive_flipped,
+                    sum_sa_indices_flipped=curr_protected_flips,
+                    sum_indices_flipped = curr_protected_flips + curr_dom_flips,
+                    iteration=len(train_indexer))
+                results_df = results_df._append(eval_results, ignore_index=True)
+        results_df.to_csv(self.local_dir_res + 'most_common_flip_results.csv', index=False) and self.experiment_name is not None
+        if self.experiment_name is None:
+            return  train_indexer
         return results_df , train_indexer
 
     def _get_weighted_key(self):
@@ -764,13 +772,16 @@ class FairnessParity:
                     total_dom_positive += 1
         return total_protected_positive, total_dom_positive
 
-    def run_fairness_par(self):
+    def run_fairness_parity(self):
 
         self._preprocess(self.df)
         self._train()
         reslts_df , train_indexer =self.label_flip()
         rename_columns_(reslts_df,self.local_dir_res + 'most_common_flip_results_doc.csv') and self.csv_to_word
-
+        if self.experiment_name is None:
+            self.y_train = flip_value(self.y_train, train_indexer, self.class_positive_value, self.config.data.class_attribute.name)
+            self._train()  # Retrain
+            return train_indexer if self.return_model is False else self.model
         return reslts_df, train_indexer
 '''
         for i in train_indexer:

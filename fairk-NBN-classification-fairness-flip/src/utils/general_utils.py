@@ -3,6 +3,9 @@ import sys
 
 import numpy as np
 import pandas as pd
+import pandas as pd
+import pandera as pa
+from pandera import DataFrameSchema, Column, Check
 
 
 def _innit_logger(name="logs.logs"):
@@ -310,6 +313,25 @@ def rename_columns_(df,path):
     }
     df = df.rename(columns=rename_dict)
     df.to_csv(path, index=False)
+
+def check_data_schema(df,class_attribute,sensitive_attribute ):
+    if class_attribute not in df.columns:
+        raise ValueError(f"Column '{class_attribute}' does not exist in the dataset.")
+    if sensitive_attribute not in df.columns:
+        raise ValueError(f"Column '{sensitive_attribute}' does not exist in the dataset.")
+
+    schema = DataFrameSchema({
+        class_attribute: Column(
+            dtype=df[class_attribute].dtype,
+            checks=Check(lambda x: x.nunique() == 2, error="Must have exactly 2 unique values")
+        ),
+        sensitive_attribute: Column(
+            dtype=df[sensitive_attribute].dtype,
+            checks=Check(lambda x: x.nunique() == 2, error="Must have exactly 2 unique values")
+        )
+    })
+
+    schema.validate(df)
 
 
 
