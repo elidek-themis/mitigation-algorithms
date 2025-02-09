@@ -24,12 +24,11 @@ basic:
   neighbors: 3
   focus_metric : 'fairness_parity_rate'
   condition:
-    affirmative_action: true
+    affirmative_action: false
     difference_percentage: 0
   weight:
-    include_dominant_attribute: true
+    include_dominant_attribute: false
     second_weight: true
-
 experiment_name: "test"
 csv_to_word : true
 

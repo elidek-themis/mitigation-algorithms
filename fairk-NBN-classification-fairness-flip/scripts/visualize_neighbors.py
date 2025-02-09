@@ -85,7 +85,7 @@ def get_train_representation(fp):
 def main(config: Config):
     frames = []
     fp = FairnessParity(config)
-    reslts_df, train_indexer = fp.run_fairness_par()
+    reslts_df, train_indexer = fp.run_fairness_parity()
     neighbor_train_df = get_train_representation(fp)
     selected_val_df = merge_t_dfs(fp.t0, fp.t1)
     frame = make_plot(fp,selected_val_df,neighbor_train_df,num=0)

@@ -3,8 +3,6 @@ import sys
 
 import numpy as np
 import pandas as pd
-import pandas as pd
-import pandera as pa
 from pandera import DataFrameSchema, Column, Check
 
 
@@ -46,7 +44,10 @@ def get_negative_protected_values(y_val,x_val,sensitive_attr_list,class_negative
         mask_y_val = np.ones_like(y_val, dtype=bool)
     else:
         mask_y_val = y_val == class_negative_value
-    mask_y_val_sensitive_attr = pd.Series(sensitive_attr_list) == sensitive_class_value
+    if sensitive_class_value == None:
+        mask_y_val_sensitive_attr = np.ones_like(y_val, dtype=bool)
+    else:
+        mask_y_val_sensitive_attr = pd.Series(sensitive_attr_list) == sensitive_class_value
     combined_mask = mask_y_val & mask_y_val_sensitive_attr
     t0_ids = x_val[combined_mask].index
     t0 = x_val[combined_mask]

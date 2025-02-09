@@ -18,7 +18,8 @@ hydra_config_name = os.getenv("HYDRA_CONFIG_NAME")
 def main(config: Config):
     logging.info("\n"+OmegaConf.to_yaml(config))
     fp = FairnessParity(config)
-    fp.run_fairness_par()
+    fp.run_fairness_parity()
+
 
 
 if __name__ == "__main__":

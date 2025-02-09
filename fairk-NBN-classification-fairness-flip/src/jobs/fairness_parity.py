@@ -118,20 +118,20 @@ class FairnessParity:
             splitting the data into training, validation, and test sets, and optionally excluding
             the sensitive attribute.
             """
-        df, self.label_encoders = encode_dataframe(df)
+        self.df, self.label_encoders = encode_dataframe(df)
 
         self.sensitive_class_value = int(self.label_encoders[self.sensitive_attribute].transform([self.sensitive_attribute_protected])[0])
         self.dominant_class_value = next(value for value in [0, 1] if value != self.sensitive_class_value)
         self.class_positive_value = self.positive_class_value
-        self.class_negative_value = [value for value in df[self.class_attribute].unique() if value != self.class_positive_value][0]
+        self.class_negative_value = [value for value in self.df[self.class_attribute].unique() if value != self.class_positive_value][0]
 
         if self.feature_selection:
-            df = backward_regression(df, self.sensitive_attribute)
+            self.df = backward_regression(df, self.sensitive_attribute)
 
-        self.features = df.columns.values.tolist()
+        self.features = self.df.columns.values.tolist()
         self.features.remove(self.class_attribute)
 
-        train_set, val_set, test_set = split_df(df=df,
+        train_set, val_set, test_set = split_df(df=self.df,
                                                 split_percent=self.split_percent,
                                                 protected_attribute=self.sensitive_attribute,
                                                 val_data=self.has_val_data,
@@ -150,6 +150,7 @@ class FairnessParity:
         self.x_val, self.y_val, self.y_val_sensitive_attr = get_xy(df=val_set,
                                                     sensitive_attribute=self.sensitive_attribute,
                                                     target_column=self.class_attribute)
+
 
         if self.exclude_sensitive_attribute:
             self.x_train = self.x_train.drop(self.sensitive_attribute,axis=1)
@@ -188,7 +189,24 @@ class FairnessParity:
         self.sum_positive_val_dom = len(get_negative_protected_values(self.y_val, self.x_val, self.y_val_sensitive_attr, None,self.dominant_class_value)[0])
         self.sum_positive_val_protected = len(get_negative_protected_values(self.y_val, self.x_val, self.y_val_sensitive_attr, None,self.sensitive_class_value)[0])
 
+    def get_statistics_df(self):
+        train_eval = Evaluate(y_actual=self.y_train, y_sensitive_attribute=self.y_train_sensitive_attr,class_attribute=self.class_attribute, sensitive_class_value=self.sensitive_class_value,dominant_class_value=self.dominant_class_value,class_positive_value=self.class_positive_value,class_negative_value=self.class_negative_value,include_pred_stats=False,set_name='train')
+        train_statistics = train_eval.get_statistics_dict()
 
+        _, y_total, y_total_sensitive_attr = get_xy(df=self.df,sensitive_attribute=self.sensitive_attribute,target_column=self.class_attribute)
+        total_eval = Evaluate(y_actual=y_total, y_sensitive_attribute=y_total_sensitive_attr,class_attribute=self.class_attribute, sensitive_class_value=self.sensitive_class_value,dominant_class_value=self.dominant_class_value,class_positive_value=self.class_positive_value,class_negative_value=self.class_negative_value,include_pred_stats=False,set_name='total')
+        total_statistics = total_eval.get_statistics_dict()
+
+        val_eval = Evaluate(y_pred=self.pred_val,y_actual=self.y_val, y_sensitive_attribute=self.y_val_sensitive_attr,class_attribute=self.class_attribute, sensitive_class_value=self.sensitive_class_value,dominant_class_value=self.dominant_class_value,class_positive_value=self.class_positive_value,class_negative_value=self.class_negative_value,set_name='val')
+        val_statistics = val_eval.get_statistics_dict()
+
+        stats_df = pd.DataFrame([val_statistics, train_statistics, total_statistics])
+        stats_df = stats_df.set_index('name').T
+        stats_df = stats_df.where(pd.notnull(stats_df), None)
+        stats_df['val_percentage'] = stats_df.apply(lambda row: (row['val'] / row['total'] * 100) if pd.notnull(row['val']) or pd.notnull(row['total']) else None, axis=1)
+        stats_df = stats_df[['val', 'val_percentage', 'train', 'total']]
+        stats_df.to_csv(self.experiment_name +'_stats.csv',index=True) and self.experiment_name is not None
+        return stats_df
 
     def _eval(self,x_data,y_data, y_sensitive_attribute,k=None):
         """
@@ -776,14 +794,16 @@ class FairnessParity:
 
         self._preprocess(self.df)
         self._train()
+
         reslts_df , train_indexer =self.label_flip()
-        rename_columns_(reslts_df,self.local_dir_res + 'most_common_flip_results_doc.csv') and self.csv_to_word
+
+        rename_columns_(reslts_df,self.local_dir_res + self.experiment_name+'_'+'most_common_flip_results.csv') and self.csv_to_word
         if self.experiment_name is None:
             self.y_train = flip_value(self.y_train, train_indexer, self.class_positive_value, self.config.data.class_attribute.name)
             self._train()  # Retrain
             return train_indexer if self.return_model is False else self.model
         return reslts_df, train_indexer
-'''
+        '''
         for i in train_indexer:
             self.y_train = flip_value(self.y_train,i,self.class_positive_value,self.config.data.class_attribute.name)
             self._train() #Retrain
