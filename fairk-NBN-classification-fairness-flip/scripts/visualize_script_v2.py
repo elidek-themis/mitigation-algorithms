@@ -71,8 +71,8 @@ def visualize_rprvsbpr(df1, df2, name):
 
 def visualize_accuracy(df1, df2, name):
     plt.rcParams.update({
-        "text.usetex": True,  # Use LaTeX for text rendering
-        "font.family": "serif",  # Use a serif font
+        "text.usetex": True,
+        "font.family": "serif",
     })
     plt.figure(figsize=(10, 6))
 
