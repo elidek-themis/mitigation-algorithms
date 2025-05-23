@@ -27,4 +27,4 @@ processor   AMD Ryzen Threadripper 3990X 64-Core Processor
 storage     Seagate FireCuda 520 SSD ZP2000GM30002 (NVMe)  
 display     TU102 TITAN RTX
 
-Once the dataset properties, the Gurobi package and license are installed, and you have verified the program requirements: run the main.py file with the inclusion of the dataset address in your local machine.  
+Once the dataset properties are set, the Gurobi package and license are installed, and you have verified the program requirements: run the main.py file with the inclusion of the dataset address in your local machine.  
