@@ -1,6 +1,7 @@
-# Anonymous ICDM 2025 Submission
+# Modularity-Fair Deep Community Detection
 
-This repository implements the community detection algorithms described in our ICDM 2025 submission, which proposes fairness-aware clustering techniques based on **group modularity**. We introduce three families of algorithms—**spectral**, **DMoN-based**, and **deep clustering with fairness-aware loss**—each designed to balance structural quality with different fairness criteria.
+
+This repository implements the community detection algorithms described in our ICDM 2025 paper **"Modularity-Fair Deep Community Detection"** , which proposes fairness-aware clustering techniques based on **group modularity**. We introduce three families of algorithms—**spectral**, **DMoN-based**, and **deep clustering with fairness-aware loss**—each designed to balance structural quality with different fairness criteria.
 
 ## Directory Structure
 
