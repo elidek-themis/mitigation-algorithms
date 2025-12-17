@@ -3,7 +3,7 @@
 This repository implements **Fair K-Means++**, a fairness-aware extension of the classical K-Means algorithm, inspired by a **physics-based force formulation**.
 
 ## Overview
-
+  
 Standard K-Means clusters data solely based on geometric proximity, ignoring sensitive attributes. This may lead to highly imbalanced clusters.
 Fair K-Means++ introduces **fairness-aware forces** that guide point-to-cluster assignments toward balanced representations of a binary sensitive attribute (e.g., gender, race).
 
