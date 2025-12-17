@@ -22,7 +22,7 @@ Each point is influenced by:
 1. **Geometric attraction** to nearby centroids (as in standard K-Means)
 2. **Fairness-aware interaction** based on the imbalance of each cluster
 
-These two effects are combined using a single parameter ( \lambda ), which controls the trade-off between clustering quality and fairness.
+These two effects are combined using a single parameter λ, which controls the trade-off between clustering quality and fairness.
 
 ---
 
@@ -30,12 +30,12 @@ These two effects are combined using a single parameter ( \lambda ), which contr
 
 * Each data point has a binary sensitive attribute (e.g., red / blue)
 * Each cluster has imbalance based on balance metric
-* Clusters with strong imbalance exert a corrective influence
-* Points are assigned to the cluster with the strongest combined influence
+* Clusters with strong imbalance exert a strong influence
+* Points are assigned to the cluster with the strongest combined influence/force
 * Centroids are updated as usual
 * The process repeats until convergence
 
-When ( \lambda = 0 ), the algorithm behaves exactly like standard K-Means.
+When ( λ = 0 ), the algorithm behaves exactly like standard K-Means.
 
 ---
 
