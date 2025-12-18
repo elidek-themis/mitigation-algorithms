@@ -45,7 +45,6 @@ When ( λ = 0 ), the algorithm behaves exactly like standard K-Means.
 model = KMeansBalanced(
     n_clusters=3,
     lambda_=0.3,
-    init_mode="kmeans"
 )
 model.fit(X, sensitive_attributes)
 labels = model.labels_
