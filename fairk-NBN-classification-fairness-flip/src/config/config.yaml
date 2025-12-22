@@ -3,7 +3,7 @@ defaults:
   - override hydra/hydra_logging: none
   - override hydra/job_logging: none
 data:
-  load_from: "/data/red_blue_dataset.csv"
+  load_from: "data/red_blue_dataset.csv"
   results_path : "results/"
   plot_path : "plots/"
   sensitive_attribute :

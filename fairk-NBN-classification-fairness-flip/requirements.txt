@@ -1,0 +1,12 @@
+hydra-core
+imageio[ffmpeg]
+matplotlib
+numpy
+omegaconf
+pandas
+pydantic
+python-dotenv
+scikit-learn
+scipy
+statsmodels
+pandera
