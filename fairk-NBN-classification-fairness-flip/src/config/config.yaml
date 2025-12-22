@@ -3,35 +3,41 @@ defaults:
   - override hydra/hydra_logging: none
   - override hydra/job_logging: none
 data:
-  load_from: "data/red_blue_dataset.csv"
-  results_path : "results/"
-  plot_path : "plots/"
+  load_from: "data/red_blue_dataset.csv"    # path to input CSV dataset
+  results_path : "results/"                 # directory to save CSV results
+  plot_path : "plots/"                      # directory to save plots
+
   sensitive_attribute :
-    name: 'color'
-    protected: 'red'
+    name: 'color'                           # sensitive attribute column name
+    protected: 'red'                        # protected group value
   class_attribute :
-    name: 'class'
-    positive_value: 1 #1 or 2 / good or bad
+    name: 'class'                           # target label column
+    positive_value: 1                       # positive class value
 
 
 basic:
-  feature_selection : False
-  exclude_sensitive_attribute : true
+  feature_selection : false                # enable backward feature selection
+  exclude_sensitive_attribute : true        # remove sensitive attribute as feature for training
+
   split_data:
-    val_data : True
-    resampling_train_set : False
-  basic_split : true
-  random_train_point : false
+    val_data : true                        # use validation split in addition to test
+    resampling_train_set : false           # balance protected/dominant groups in training
+
+  basic_split : true                       # use simple train/test split
+  random_train_point : false               # Random baseline flipping strategy
   split_percent : 0.2
-  neighbors: 3
+  neighbors: 3                             # number of neighbors (k) for k-NN
+
   condition:
     affirmative_action: false
     sensitive_catches_dominant: false
-    difference_percentage: 0
+    difference_percentage: 0                # target parity difference
+
   weight:
-    second_weight: true
+    second_weight: true                     # neighbors from dominant class are considered on each iteration
 experiment_name: "red_blue"
-csv_to_word : true
+csv_to_word : true                         # helper of column names
+
 
 hydra:
   output_subdir: /data
